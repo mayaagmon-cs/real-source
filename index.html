@@ -3,37 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Source Checker</title>
+  <title>Source Verification</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="container">
     <div class="card">
       <h1 class="title">Source Verification</h1>
-      <p class="subtitle">Quick and simple source entry</p>
+      <p class="subtitle">Quick and simple source verification</p>
 
-      <!-- Initial state: Only this button is shown -->
+      <!-- Initial state: Only "Enter source" button -->
       <div id="initial-view">
         <button id="enter-source-btn" class="btn primary-btn" type="button">
           Enter source
         </button>
       </div>
 
-      <!-- Second state: Appears after clicking "Enter source" -->
+      <!-- Second state: Text box and "Check source" button -->
       <div id="input-view" class="hidden">
-        <div class="input-group">
-          <label for="source-input" class="sr-only">Source</label>
-          <input
-            type="text"
-            id="source-input"
-            class="text-input"
-            placeholder="Type or paste the source here..."
-            autocomplete="off"
-          />
+        <div class="input-row">
+          <div class="input-wrapper">
+            <label for="source-input" class="sr-only">Source URL</label>
+            <input
+              type="text"
+              id="source-input"
+              class="text-input"
+              placeholder="Enter source URL (e.g. https://...)"
+              autocomplete="off"
+            />
+          </div>
+          <!-- V mark or X mark next to text box -->
+          <div id="input-badge" class="result-badge hidden" aria-live="polite"></div>
         </div>
-        <button id="check-source-btn" class="btn primary-btn" type="button">
-          Check source
-        </button>
+
+        <div class="button-row">
+          <button id="check-source-btn" class="btn primary-btn" type="button">
+            Check source
+          </button>
+          <!-- Red X mark next to button if not found -->
+          <div id="button-badge" class="result-badge hidden" aria-live="polite"></div>
+        </div>
+
         <div id="status-message" class="status-message hidden" role="status"></div>
       </div>
     </div>
