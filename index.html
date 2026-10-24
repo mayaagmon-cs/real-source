@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Source Checker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <div class="card">
+      <h1 class="title">Source Verification</h1>
+      <p class="subtitle">Quick and simple source entry</p>
+
+      <!-- Initial state: Only this button is shown -->
+      <div id="initial-view">
+        <button id="enter-source-btn" class="btn primary-btn" type="button">
+          Enter source
+        </button>
+      </div>
+
+      <!-- Second state: Appears after clicking "Enter source" -->
+      <div id="input-view" class="hidden">
+        <div class="input-group">
+          <label for="source-input" class="sr-only">Source</label>
+          <input
+            type="text"
+            id="source-input"
+            class="text-input"
+            placeholder="Type or paste the source here..."
+            autocomplete="off"
+          />
+        </div>
+        <button id="check-source-btn" class="btn primary-btn" type="button">
+          Check source
+        </button>
+        <div id="status-message" class="status-message hidden" role="status"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
