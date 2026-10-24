@@ -21,28 +21,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const handleCheckSource = async () => {
     const rawInput = sourceInput.value.trim();
 
-    // Reset badges & status
     resetBadges();
     hideStatus();
 
     if (!rawInput) {
-      showStatus('Please enter a source URL or text to check.', 'error');
+      showStatus('Please enter a source URL or paste text to check.', 'error');
       showErrorBadges();
       sourceInput.focus();
       return;
     }
 
-    // Set loading indicator
     setLoadingState(true);
 
     try {
       let isFound = false;
 
-      // 1. Check if the entered text directly contains the target text
+      // 1. Direct text check: If user typed or pasted text containing the target
       if (rawInput.includes(TARGET_TEXT)) {
         isFound = true;
-      } else {
-        // 2. Fetch from the URL if it looks like a web address
+      } else if (looksLikeUrl(rawInput)) {
+        // 2. If it's a URL, fetch content using multi-proxy fallback
         const content = await fetchPageContent(rawInput);
         if (content && content.includes(TARGET_TEXT)) {
           isFound = true;
@@ -61,58 +59,109 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       setLoadingState(false);
       showErrorBadges();
-      showStatus(`Could not inspect source: ${err.message || 'Verification failed.'}`, 'error');
+      showStatus(
+        `${err.message || 'Verification failed.'} Tip: You can also copy and paste the article text directly into the box.`,
+        'error'
+      );
     }
   };
 
-  // Helper to fetch remote webpage content via CORS proxy
+  function looksLikeUrl(text) {
+    if (text.includes('\n')) return false;
+    return /^https?:\/\//i.test(text) || (!text.includes(' ') && /^[a-z0-9-]+(\.[a-z]{2,})+/i.test(text));
+  }
+
+  // Robust multi-strategy fetch engine with Jina Reader as primary
   async function fetchPageContent(inputUrl) {
-    let url = inputUrl;
+    let url = inputUrl.trim();
     if (!/^https?:\/\//i.test(url)) {
       url = 'https://' + url;
     }
 
-    // Validate URL structure
-    try {
-      new URL(url);
-    } catch {
-      throw new Error('Invalid URL format');
+    // List of scrapers/proxies to attempt in order
+    const strategies = [
+      // 1. Jina Reader: Bypasses Cloudflare & Bot-shields, renders JS sites (e.g. Ynet, Walla, etc.)
+      async (target) => {
+        const controller = new AbortController();
+        const tId = setTimeout(() => controller.abort(), 12000);
+        try {
+          const res = await fetch(`https://r.jina.ai/${target}`, {
+            signal: controller.signal,
+            headers: { 'Accept': 'text/plain' }
+          });
+          clearTimeout(tId);
+          if (res.ok) {
+            const txt = await res.text();
+            if (txt && txt.length > 30) return txt;
+          }
+        } catch (e) {
+          clearTimeout(tId);
+        }
+        return null;
+      },
+
+      // 2. AllOrigins raw proxy fallback
+      async (target) => {
+        const controller = new AbortController();
+        const tId = setTimeout(() => controller.abort(), 8000);
+        try {
+          const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`, {
+            signal: controller.signal
+          });
+          clearTimeout(tId);
+          if (res.ok) {
+            const txt = await res.text();
+            if (txt && txt.length > 30) return txt;
+          }
+        } catch (e) {
+          clearTimeout(tId);
+        }
+        return null;
+      },
+
+      // 3. CodeTabs proxy fallback
+      async (target) => {
+        const controller = new AbortController();
+        const tId = setTimeout(() => controller.abort(), 8000);
+        try {
+          const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`, {
+            signal: controller.signal
+          });
+          clearTimeout(tId);
+          if (res.ok) {
+            const txt = await res.text();
+            if (txt && txt.length > 30) return txt;
+          }
+        } catch (e) {
+          clearTimeout(tId);
+        }
+        return null;
+      }
+    ];
+
+    for (const strategy of strategies) {
+      try {
+        const content = await strategy(url);
+        if (content) {
+          return content;
+        }
+      } catch (_) {
+        // Try next fallback
+      }
     }
 
-    // Use CORS proxy to bypass browser cross-origin restrictions
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
-
-    try {
-      const response = await fetch(proxyUrl, { signal: controller.signal });
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        throw new Error(`Failed to load URL (status ${response.status})`);
-      }
-
-      const text = await response.text();
-      return text;
-    } catch (error) {
-      clearTimeout(timeout);
-      if (error.name === 'AbortError') {
-        throw new Error('Connection timed out while loading the page.');
-      }
-      throw new Error('Network error or source page blocked cross-origin access.');
-    }
+    throw new Error('This website blocks automated cross-origin readers.');
   }
 
   function setLoadingState(isLoading) {
     if (isLoading) {
       checkSourceBtn.disabled = true;
-      checkSourceBtn.textContent = 'Checking...';
+      checkSourceBtn.textContent = 'Checking source...';
       inputBadge.className = 'result-badge badge-loading';
       inputBadge.innerHTML = '<div class="spinner"></div>';
       inputBadge.classList.remove('hidden');
       buttonBadge.classList.add('hidden');
-      showStatus('Fetching and analyzing source...', 'info');
+      showStatus('Fetching and analyzing source (this may take a few seconds)...', 'info');
     } else {
       checkSourceBtn.disabled = false;
       checkSourceBtn.textContent = 'Check source';
@@ -120,24 +169,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showSuccessBadge() {
-    // Green V mark next to the text box
     inputBadge.className = 'result-badge badge-success';
-    inputBadge.innerHTML = '&#10004;'; // Checkmark ✔
+    inputBadge.innerHTML = '&#10004;'; // ✔
     inputBadge.classList.remove('hidden');
-
-    // Hide error mark next to button
     buttonBadge.classList.add('hidden');
   }
 
   function showErrorBadges() {
-    // Red X mark next to text box
     inputBadge.className = 'result-badge badge-error';
-    inputBadge.innerHTML = '&#10006;'; // Heavy multiplication X ✖
+    inputBadge.innerHTML = '&#10006;'; // ✖
     inputBadge.classList.remove('hidden');
 
-    // Red X mark next to the button
     buttonBadge.className = 'result-badge badge-error';
-    buttonBadge.innerHTML = '&#10006;'; // Heavy multiplication X ✖
+    buttonBadge.innerHTML = '&#10006;'; // ✖
     buttonBadge.classList.remove('hidden');
   }
 
@@ -161,14 +205,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   checkSourceBtn.addEventListener('click', handleCheckSource);
 
-  // Trigger check on Enter key
+  // Trigger check on Enter (without Shift)
   sourceInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
       handleCheckSource();
     }
   });
 
-  // Clear badges when user edits the text
+  // Reset status when user changes input
   sourceInput.addEventListener('input', () => {
     resetBadges();
     hideStatus();

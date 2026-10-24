@@ -10,7 +10,7 @@
   <main class="container">
     <div class="card">
       <h1 class="title">Source Verification</h1>
-      <p class="subtitle">Quick and simple source verification</p>
+      <p class="subtitle">Quick verification for the term <strong class="target-word">איזנקוט</strong></p>
 
       <!-- Initial state: Only "Enter source" button -->
       <div id="initial-view">
@@ -19,18 +19,18 @@
         </button>
       </div>
 
-      <!-- Second state: Text box and "Check source" button -->
+      <!-- Second state: Input and "Check source" button -->
       <div id="input-view" class="hidden">
         <div class="input-row">
           <div class="input-wrapper">
-            <label for="source-input" class="sr-only">Source URL</label>
-            <input
-              type="text"
+            <label for="source-input" class="sr-only">Source URL or Text</label>
+            <textarea
               id="source-input"
               class="text-input"
-              placeholder="Enter source URL (e.g. https://...)"
+              rows="2"
+              placeholder="Enter source URL (e.g. https://...) or paste text directly..."
               autocomplete="off"
-            />
+            ></textarea>
           </div>
           <!-- V mark or X mark next to text box -->
           <div id="input-badge" class="result-badge hidden" aria-live="polite"></div>
