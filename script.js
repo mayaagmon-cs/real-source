@@ -3,18 +3,61 @@ document.addEventListener('DOMContentLoaded', () => {
   const initialView = document.getElementById('initial-view');
   const inputView = document.getElementById('input-view');
   const checkSourceBtn = document.getElementById('check-source-btn');
-  const sourceInput = document.getElementById('source-input');
-  const inputBadge = document.getElementById('input-badge');
-  const buttonBadge = document.getElementById('button-badge');
+
+  // Dual Source Inputs
+  const sourceInput1 = document.getElementById('source-input-1');
+  const sourceInput2 = document.getElementById('source-input-2');
+
+  // Dual HeadLines Outputs & Counters
+  const headlinesOutput1 = document.getElementById('headlines-output-1');
+  const headlinesOutput2 = document.getElementById('headlines-output-2');
+  const headlinesCount1 = document.getElementById('headlines-count-1');
+  const headlinesCount2 = document.getElementById('headlines-count-2');
+
+  // Status and Inspection Logs
   const statusMessage = document.getElementById('status-message');
-  const headlinesOutput = document.getElementById('headlines-output');
-  const headlinesCount = document.getElementById('headlines-count');
   const toggleLogBtn = document.getElementById('toggle-log-btn');
   const scrapingLogPanel = document.getElementById('scraping-log-panel');
   const scrapingLogContent = document.getElementById('scraping-log-content');
   const botShieldStatus = document.getElementById('bot-shield-status');
 
+  // Preserved badges for target verification
+  const inputBadge1 = document.getElementById('input-badge-1');
+  const inputBadge2 = document.getElementById('input-badge-2');
+  const buttonBadge = document.getElementById('button-badge');
+
+  // =========================================================================
+  // Target Word Verification Logic (Preserved as requested, not active on click)
+  // =========================================================================
   const TARGET_TEXT = 'איזנקוט';
+
+  function verifyTargetText(text) {
+    if (!text || typeof text !== 'string') return false;
+    return text.includes(TARGET_TEXT);
+  }
+
+  function showSuccessBadge(badgeEl) {
+    if (!badgeEl) return;
+    badgeEl.className = 'result-badge badge-success';
+    badgeEl.innerHTML = '&#10004;';
+    badgeEl.classList.remove('hidden');
+  }
+
+  function showErrorBadge(badgeEl) {
+    if (!badgeEl) return;
+    badgeEl.className = 'result-badge badge-error';
+    badgeEl.innerHTML = '&#10006;';
+    badgeEl.classList.remove('hidden');
+  }
+
+  function resetBadges() {
+    [inputBadge1, inputBadge2, buttonBadge].forEach(b => {
+      if (b) {
+        b.className = 'result-badge hidden';
+        b.innerHTML = '';
+      }
+    });
+  }
 
   // Toggle log panel visibility
   toggleLogBtn.addEventListener('click', () => {
@@ -26,10 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
   enterSourceBtn.addEventListener('click', () => {
     initialView.classList.add('hidden');
     inputView.classList.remove('hidden');
-    sourceInput.focus();
+    sourceInput1.focus();
   });
 
-  // Logger helper
+  // Logger helpers
   const logEntries = [];
   function addLog(message, type = 'info') {
     const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -55,95 +98,95 @@ document.addEventListener('DOMContentLoaded', () => {
     botShieldStatus.className = `bot-badge badge-${state}`;
   }
 
-  // Action on checking source
-  const handleCheckSource = async () => {
-    const rawInput = sourceInput.value.trim();
+  // =========================================================================
+  // Dual Source Check Action ("Check Sources")
+  // =========================================================================
+  const handleCheckSources = async () => {
+    const input1 = sourceInput1.value.trim();
+    const input2 = sourceInput2.value.trim();
 
     resetBadges();
     hideStatus();
     resetHeadlines();
     resetLogs();
 
-    if (!rawInput) {
-      showStatus('Please enter a source URL or paste text to check.', 'error');
-      showErrorBadges();
-      headlinesOutput.value = '';
-      sourceInput.focus();
+    if (!input1 && !input2) {
+      showStatus('Please enter at least one source URL or text to check.', 'error');
+      sourceInput1.focus();
       return;
     }
 
     setLoadingState(true);
-    addLog('Scraping engine initialized.', 'engine');
-    headlinesOutput.value = '🔍 Scraping engine running: awaiting dynamic rendering & network idle... Please wait.';
+    addLog('Scraping engine initialized for multi-source inspection.', 'engine');
+
+    const tasks = [];
+
+    // Process Source 1
+    if (input1) {
+      headlinesOutput1.value = '🔍 Scraping & diagnosing Source 1... Please wait.';
+      tasks.push(processSingleSource(input1, 1, headlinesOutput1, headlinesCount1));
+    } else {
+      headlinesOutput1.value = 'No source entered for Source 1.';
+      headlinesCount1.classList.add('hidden');
+    }
+
+    // Process Source 2
+    if (input2) {
+      headlinesOutput2.value = '🔍 Scraping & diagnosing Source 2... Please wait.';
+      tasks.push(processSingleSource(input2, 2, headlinesOutput2, headlinesCount2));
+    } else {
+      headlinesOutput2.value = 'No source entered for Source 2.';
+      headlinesCount2.classList.add('hidden');
+    }
 
     try {
-      let content = '';
+      await Promise.allSettled(tasks);
+      setLoadingState(false);
+      showStatus('Source headlines diagnosed and displayed successfully!', 'success');
+      addLog('All source diagnosis tasks completed.', 'success');
+    } catch (e) {
+      setLoadingState(false);
+      showStatus(`Diagnosis completed with warnings: ${e.message}`, 'error');
+    }
+  };
+
+  // Process an individual source independently
+  async function processSingleSource(rawInput, sourceNum, outputEl, countEl) {
+    try {
+      addLog(`[Source ${sourceNum}] Initializing diagnosis for source...`);
+      let content = rawInput;
       let fetchReport = { provider: 'direct', isBotShielded: false, httpStatus: 200, antiBotNote: '' };
 
       if (looksLikeUrl(rawInput)) {
-        addLog(`Target URL identified: ${rawInput}`);
-        addLog('Step 1: Initiating dynamic rendering scraper with network-idle wait...', 'engine');
-        
-        // Auto-scroll trigger simulation
-        addLog('Step 2: Simulating auto-scroll trigger for lazy-loaded headlines & dynamic items...', 'scroll');
-        
-        const fetchResult = await fetchPageContentDynamic(rawInput);
-        content = fetchResult.content;
-        fetchReport = fetchResult.report;
+        addLog(`[Source ${sourceNum}] Target URL: ${rawInput}`);
+        addLog(`[Source ${sourceNum}] Executing dynamic headless scraper with network-idle wait...`, 'engine');
+        addLog(`[Source ${sourceNum}] Simulating auto-scroll trigger for lazy-loaded items...`, 'scroll');
+        const res = await fetchPageContentDynamic(rawInput, sourceNum);
+        content = res.content;
+        fetchReport = res.report;
       } else {
-        addLog('Input is direct text/HTML snippet. Bypassing network fetch.');
-        content = rawInput;
+        addLog(`[Source ${sourceNum}] Input is raw text/HTML snippet. Bypassing network fetch.`);
       }
 
-      setLoadingState(false);
+      addLog(`[Source ${sourceNum}] Running multi-tiered extraction pipeline...`, 'engine');
+      const diagnosed = extractHeadlinesUpgraded(content || rawInput, rawInput, fetchReport, sourceNum);
+      renderDiagnosedHeadlines(diagnosed, outputEl, countEl, sourceNum);
 
-      // Perform upgraded extraction
-      addLog('Step 3: Executing multi-tiered extraction (Semantic containers, broadened selectors, SPA state, metadata)...', 'engine');
-      const diagnosed = extractHeadlinesUpgraded(content || rawInput, rawInput, fetchReport);
-      renderDiagnosedHeadlines(diagnosed);
-
-      // Inspect for anti-bot blocks
       if (fetchReport.isBotShielded) {
         setBotBadge('Shield Detected', 'error');
-        addLog(`Anti-Bot Inspection: ${fetchReport.antiBotNote}`, 'error');
-        scrapingLogPanel.classList.remove('hidden');
-        toggleLogBtn.textContent = 'Hide Log';
+        addLog(`[Source ${sourceNum}] Anti-bot challenge flagged: ${fetchReport.antiBotNote}`, 'error');
       } else if (diagnosed.totalCount === 0) {
-        setBotBadge('Empty Containers', 'warning');
-        addLog('Inspection Warning: Semantic containers returned empty and no headlines were found.', 'warning');
+        addLog(`[Source ${sourceNum}] Warning: 0 headlines found.`, 'warning');
       } else {
         setBotBadge('Clean Render', 'success');
-        addLog(`Extraction complete: ${diagnosed.totalCount} unique headlines diagnosed across all tiers.`, 'success');
-      }
-
-      // Check for target text "איזנקוט"
-      const combinedSearchSpace = `${rawInput}\n${content}\n${diagnosed.allHeadlines.join('\n')}`;
-      const isFound = combinedSearchSpace.includes(TARGET_TEXT);
-
-      if (isFound) {
-        showSuccessBadge();
-        showStatus(`Success! Found "${TARGET_TEXT}" in the source.`, 'success');
-        addLog(`Target Verification: Term "${TARGET_TEXT}" was confirmed in source content.`, 'success');
-      } else {
-        showErrorBadges();
-        showStatus(`The text "${TARGET_TEXT}" was not found in the source.`, 'error');
-        addLog(`Target Verification: Term "${TARGET_TEXT}" was not found.`, 'info');
+        addLog(`[Source ${sourceNum}] Extraction succeeded: ${diagnosed.totalCount} headlines diagnosed.`, 'success');
       }
     } catch (err) {
-      setLoadingState(false);
-      showErrorBadges();
-      setBotBadge('Scrape Blocked', 'error');
-      addLog(`Scraping Engine Failure: ${err.message || 'Verification failed.'}`, 'error');
-      scrapingLogPanel.classList.remove('hidden');
-      toggleLogBtn.textContent = 'Hide Log';
-
-      headlinesOutput.value = `❌ Scraping Error: ${err.message || 'Verification failed.'}\n\nTip: You can copy and paste the article text or headlines directly into the source box above.`;
-      showStatus(
-        `${err.message || 'Verification failed.'} Tip: You can also copy and paste the article text directly into the box.`,
-        'error'
-      );
+      outputEl.value = `❌ Source ${sourceNum} Error: ${err.message || 'Diagnosis failed.'}\n\nTip: You can copy and paste the article text or HTML directly into the box.`;
+      countEl.classList.add('hidden');
+      addLog(`[Source ${sourceNum}] Scraping error: ${err.message}`, 'error');
     }
-  };
+  }
 
   function looksLikeUrl(text) {
     if (text.includes('\n')) return false;
@@ -153,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // =========================================================================
   // Dynamic Scraping Engine with Headless SPA Support & Anti-Bot Inspection
   // =========================================================================
-  async function fetchPageContentDynamic(inputUrl) {
+  async function fetchPageContentDynamic(inputUrl, sourceNum = 1) {
     let url = inputUrl.trim();
     if (!/^https?:\/\//i.test(url)) {
       url = 'https://' + url;
@@ -167,7 +210,6 @@ document.addEventListener('DOMContentLoaded', () => {
       emptyContainerDetected: false
     };
 
-    // Helper to detect bot shields & CAPTCHAs in payload
     function detectBotShields(text) {
       if (!text || typeof text !== 'string') return null;
       const lower = text.toLowerCase();
@@ -182,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'Imperva / Incapsula Bot Shield';
       }
       if (lower.includes('access denied') && lower.includes('403 forbidden')) {
-        return 'HTTP 403 Forbidden - Access Denied by Web Application Firewall (WAF)';
+        return 'HTTP 403 Forbidden - Access Denied by WAF';
       }
       if (lower.includes('challenge-platform') || lower.includes('captcha-delivery')) {
         return 'Automated CAPTCHA Delivery Detected';
@@ -190,9 +232,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return null;
     }
 
-    // 1. Primary: Headless Chromium SPA Render via Jina Reader (with JS execution & network wait)
+    // 1. Primary: Headless Chromium SPA Render via Jina Reader
     try {
-      addLog('Connecting to headless browser engine (waiting for JS execution & network idle)...');
+      addLog(`[Source ${sourceNum}] Connecting to headless browser engine...`);
       const controller = new AbortController();
       const tId = setTimeout(() => controller.abort(), 15000);
 
@@ -216,24 +258,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shield) {
           report.isBotShielded = true;
           report.antiBotNote = shield;
-          addLog(`Headless provider flagged anti-bot challenge: ${shield}`, 'warning');
+          addLog(`[Source ${sourceNum}] Headless provider flagged anti-bot challenge: ${shield}`, 'warning');
         } else if (text && text.length > 40) {
           report.provider = 'Jina Headless Browser Engine (Rendered DOM & JS executed)';
-          addLog('Dynamic rendering succeeded: headless browser rendered full DOM.', 'success');
+          addLog(`[Source ${sourceNum}] Dynamic rendering succeeded: headless browser rendered DOM.`, 'success');
           return { content: text, report };
         }
       } else if (res.status === 403 || res.status === 401) {
         report.isBotShielded = true;
         report.antiBotNote = `HTTP ${res.status} Forbidden returned by target server.`;
-        addLog(`Headless provider returned status ${res.status}: Access Denied.`, 'warning');
+        addLog(`[Source ${sourceNum}] Headless provider returned status ${res.status}: Access Denied.`, 'warning');
       }
     } catch (e) {
-      addLog(`Headless rendering connection failed or timed out: ${e.message}. Attempting proxy fallback...`, 'warning');
+      addLog(`[Source ${sourceNum}] Headless rendering connection failed or timed out: ${e.message}. Attempting proxy fallback...`, 'warning');
     }
 
-    // 2. Secondary: Raw HTML Proxy via AllOrigins (allows inspecting HTTP status and headers)
+    // 2. Secondary: Raw HTML Proxy via AllOrigins
     try {
-      addLog('Falling back to proxy extraction (checking raw DOM and HTTP headers)...');
+      addLog(`[Source ${sourceNum}] Falling back to proxy extraction...`);
       const controller = new AbortController();
       const tId = setTimeout(() => controller.abort(), 10000);
 
@@ -252,22 +294,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (shield || httpCode === 403) {
           report.isBotShielded = true;
           report.antiBotNote = shield || `Target server returned HTTP ${httpCode} Forbidden.`;
-          addLog(`Proxy inspection: ${report.antiBotNote}`, 'error');
+          addLog(`[Source ${sourceNum}] Proxy inspection: ${report.antiBotNote}`, 'error');
         }
 
         if (rawHtml && rawHtml.length > 50) {
           report.provider = 'AllOrigins Raw HTML Proxy';
-          addLog('Raw HTML proxy response received.', 'info');
+          addLog(`[Source ${sourceNum}] Raw HTML proxy response received.`, 'info');
           return { content: rawHtml, report };
         }
       }
     } catch (e) {
-      addLog(`Proxy fallback 1 failed: ${e.message}`, 'warning');
+      addLog(`[Source ${sourceNum}] Proxy fallback failed: ${e.message}`, 'warning');
     }
 
-    // 3. Tertiary: CodeTabs Proxy
+    // 3. Tertiary: CodeTabs Proxy Gateway
     try {
-      addLog('Falling back to secondary CORS gateway...');
+      addLog(`[Source ${sourceNum}] Falling back to secondary CORS gateway...`);
       const controller = new AbortController();
       const tId = setTimeout(() => controller.abort(), 9000);
 
@@ -285,12 +327,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (txt && txt.length > 50) {
           report.provider = 'CodeTabs Gateway';
-          addLog('Secondary CORS gateway response received.', 'info');
+          addLog(`[Source ${sourceNum}] Secondary CORS gateway response received.`, 'info');
           return { content: txt, report };
         }
       }
     } catch (e) {
-      addLog(`Secondary CORS gateway failed: ${e.message}`, 'warning');
+      addLog(`[Source ${sourceNum}] Secondary CORS gateway failed: ${e.message}`, 'warning');
     }
 
     if (report.isBotShielded) {
@@ -303,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // =========================================================================
   // Upgraded Multi-Tiered Headline Extraction with Broadened Selectors & SPA State
   // =========================================================================
-  function extractHeadlinesUpgraded(rawContent, originalInput, fetchReport) {
+  function extractHeadlinesUpgraded(rawContent, originalInput, fetchReport, sourceNum = 1) {
     if (!rawContent || typeof rawContent !== 'string') {
       return { mainHeadline: '', subHeadline: '', allHeadlines: [], totalCount: 0 };
     }
@@ -405,12 +447,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(rawContent, 'text/html');
 
-        // A. Modern SPA Hydration State Extraction (Next.js, Nuxt.js, Remix)
+        // A. Next.js / Nuxt.js Client-Side SPA Hydration State
         const nextDataScript = doc.getElementById('__NEXT_DATA__');
         if (nextDataScript) {
           try {
             const nextJson = JSON.parse(nextDataScript.textContent);
-            addLog('Discovered Next.js client-side SPA state (__NEXT_DATA__). Extracting embedded titles...', 'info');
+            addLog(`[Source ${sourceNum}] Discovered Next.js client SPA state (__NEXT_DATA__).`, 'info');
             extractFromJsonObject(nextJson);
           } catch (_) {}
         }
@@ -419,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (nuxtDataScript) {
           try {
             const nuxtJson = JSON.parse(nuxtDataScript.textContent);
-            addLog('Discovered Nuxt.js client-side SPA state (__NUXT_DATA__). Extracting embedded titles...', 'info');
+            addLog(`[Source ${sourceNum}] Discovered Nuxt.js client SPA state (__NUXT_DATA__).`, 'info');
             extractFromJsonObject(nuxtJson);
           } catch (_) {}
         }
@@ -470,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
           } catch (_) {}
         });
-        if (ldCount > 0) addLog(`Extracted ${ldCount} headline(s) from JSON-LD schema metadata.`, 'info');
+        if (ldCount > 0) addLog(`[Source ${sourceNum}] Extracted ${ldCount} headline(s) from JSON-LD schema metadata.`, 'info');
 
         // C. OpenGraph & Twitter Meta Tags
         const ogTitle = doc.querySelector('meta[property="og:title"], meta[name="og:title"], meta[property="og:headline"]')?.getAttribute('content');
@@ -485,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const twDesc = doc.querySelector('meta[name="twitter:description"], meta[property="twitter:description"]')?.getAttribute('content');
         if (twDesc && twDesc.length > 20) registerHeadline(twDesc, 'sub');
 
-        // D. Microdata (itemprop="headline", itemprop="name")
+        // D. Microdata
         doc.querySelectorAll('[itemprop="headline"], [itemprop="name"], [itemprop="alternativeHeadline"]').forEach(el => {
           registerHeadline(el.textContent, 'general');
         });
@@ -519,26 +561,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // =====================================================================
-        // Inspection: Check if Main Content Containers are Empty
-        // =====================================================================
-        const mainContainer = cleanedDoc.querySelector('main, article, #root, #app, [role="main"]');
-        if (mainContainer) {
-          const innerText = mainContainer.textContent.trim();
-          if (innerText.length < 30) {
-            addLog('Container Inspection: <main>/<article> is nearly empty (client-side dynamic render pending or blocked).', 'warning');
-          } else {
-            addLog(`Container Inspection: Main container located with ${innerText.length} characters of rendered text.`, 'info');
-          }
-        }
-
-        // =====================================================================
         // Broadened CSS Selectors (ARIA roles, substring patterns, article links)
         // =====================================================================
         const broadenedSelectors = [
-          // 1. Heading tags and ARIA heading roles
           'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
           '[role="heading"]', '[aria-level]',
-          // 2. Substring class patterns (*=title, *=headline, *=card-title, *=post-title)
           '[class*="title" i]', '[id*="title" i]',
           '[class*="headline" i]', '[id*="headline" i]',
           '[class*="card-title" i]', '[id*="card-title" i]',
@@ -548,23 +575,19 @@ document.addEventListener('DOMContentLoaded', () => {
           '[class*="story-title" i]', '[id*="story-title" i]',
           '[class*="mainTitle" i]', '[class*="subTitle" i]', '[class*="slotTitle" i]',
           '[class*="teaser-title" i]', '[class*="feed-title" i]',
-          // 3. Data attributes
           '[data-qa*="headline" i]', '[data-mrf-title]'
         ];
 
-        // Semantic containers priority
         const semanticContainers = cleanedDoc.querySelectorAll('article, [role="article"], main, [role="main"], section[class*="article" i], section[class*="content" i]');
 
         if (semanticContainers.length > 0) {
           semanticContainers.forEach((container) => {
-            // Match broadened selectors inside container
             container.querySelectorAll(broadenedSelectors.join(', ')).forEach((el) => {
               const tag = el.tagName.toLowerCase();
               const cat = (tag === 'h1' || el.matches('[class*="mainTitle" i]')) ? 'main' : (tag === 'h2' || el.matches('[class*="subTitle" i]')) ? 'sub' : 'general';
               registerHeadline(el.textContent, cat);
             });
 
-            // Article links inside <article> or <main>
             container.querySelectorAll('a').forEach((link) => {
               const linkText = link.textContent.trim();
               if (linkText.length >= 18 && linkText.length <= 250 && linkText.includes(' ')) {
@@ -574,7 +597,6 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         }
 
-        // Global fallback across cleaned document if elements were sparse
         if (collected.length < 4) {
           cleanedDoc.querySelectorAll(broadenedSelectors.join(', ')).forEach((el) => {
             const tag = el.tagName.toLowerCase();
@@ -671,12 +693,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // Render the diagnosed headlines fully and structured in the textarea
-  function renderDiagnosedHeadlines(diagnosed) {
+  // Render the diagnosed headlines for an individual source output box
+  function renderDiagnosedHeadlines(diagnosed, outputEl, countEl, sourceNum) {
     if (!diagnosed || diagnosed.allHeadlines.length === 0) {
-      headlinesOutput.value = 'No headlines were detected in this source.\n\nTip: You can copy and paste the text or HTML of the article directly into the input box above.';
-      headlinesCount.textContent = '';
-      headlinesCount.classList.add('hidden');
+      outputEl.value = `No headlines were detected in Source ${sourceNum}.\n\nTip: You can copy and paste the text or HTML of the article directly into the input box above.`;
+      countEl.textContent = '';
+      countEl.classList.add('hidden');
       return;
     }
 
@@ -687,65 +709,38 @@ document.addEventListener('DOMContentLoaded', () => {
       sections.push(`📌 כותרת ראשית (Main Headline):\n${diagnosed.mainHeadline}`);
     }
 
-    // 2. Sub-Headline / Summary (if distinct from main headline)
+    // 2. Sub-Headline / Summary
     if (diagnosed.subHeadline && diagnosed.subHeadline !== diagnosed.mainHeadline) {
       sections.push(`📝 כותרת משנה / תקציר (Sub-Headline):\n${diagnosed.subHeadline}`);
     }
 
     // 3. All Diagnosed Headlines List
     const listLines = diagnosed.allHeadlines.map((h, index) => `${index + 1}. ${h}`);
-    sections.push(`📰 כל הכותרות שאובחנו מהמקור (${diagnosed.totalCount}):\n${listLines.join('\n\n')}`);
+    sections.push(`📰 כל הכותרות שאובחנו ממקור ${sourceNum} (${diagnosed.totalCount}):\n${listLines.join('\n\n')}`);
 
-    headlinesOutput.value = sections.join('\n\n========================================\n\n');
+    outputEl.value = sections.join('\n\n========================================\n\n');
 
-    // Update the counter pill
-    headlinesCount.textContent = `${diagnosed.totalCount} headlines diagnosed`;
-    headlinesCount.classList.remove('hidden');
+    countEl.textContent = `${diagnosed.totalCount} headlines`;
+    countEl.classList.remove('hidden');
   }
 
   function resetHeadlines() {
-    headlinesOutput.value = '';
-    headlinesCount.textContent = '';
-    headlinesCount.classList.add('hidden');
+    headlinesOutput1.value = '';
+    headlinesOutput2.value = '';
+    headlinesCount1.textContent = '';
+    headlinesCount2.textContent = '';
+    headlinesCount1.classList.add('hidden');
+    headlinesCount2.classList.add('hidden');
   }
 
   function setLoadingState(isLoading) {
     if (isLoading) {
       checkSourceBtn.disabled = true;
-      checkSourceBtn.textContent = 'Diagnosing...';
-      inputBadge.className = 'result-badge badge-loading';
-      inputBadge.innerHTML = '<div class="spinner"></div>';
-      inputBadge.classList.remove('hidden');
-      buttonBadge.classList.add('hidden');
-      showStatus('Executing dynamic rendering & multi-tiered diagnosis...', 'info');
+      checkSourceBtn.textContent = 'Checking Sources...';
     } else {
       checkSourceBtn.disabled = false;
-      checkSourceBtn.textContent = 'Check source';
+      checkSourceBtn.textContent = 'Check Sources';
     }
-  }
-
-  function showSuccessBadge() {
-    inputBadge.className = 'result-badge badge-success';
-    inputBadge.innerHTML = '&#10004;'; // ✔
-    inputBadge.classList.remove('hidden');
-    buttonBadge.classList.add('hidden');
-  }
-
-  function showErrorBadges() {
-    inputBadge.className = 'result-badge badge-error';
-    inputBadge.innerHTML = '&#10006;'; // ✖
-    inputBadge.classList.remove('hidden');
-
-    buttonBadge.className = 'result-badge badge-error';
-    buttonBadge.innerHTML = '&#10006;'; // ✖
-    buttonBadge.classList.remove('hidden');
-  }
-
-  function resetBadges() {
-    inputBadge.className = 'result-badge hidden';
-    inputBadge.innerHTML = '';
-    buttonBadge.className = 'result-badge hidden';
-    buttonBadge.innerHTML = '';
   }
 
   function showStatus(text, type) {
@@ -759,23 +754,23 @@ document.addEventListener('DOMContentLoaded', () => {
     statusMessage.textContent = '';
   }
 
-  checkSourceBtn.addEventListener('click', handleCheckSource);
+  checkSourceBtn.addEventListener('click', handleCheckSources);
 
-  // Trigger check on Enter (without Shift)
-  sourceInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleCheckSource();
-    }
-  });
+  // Trigger check on Enter (without Shift) from either source input
+  [sourceInput1, sourceInput2].forEach(input => {
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        handleCheckSources();
+      }
+    });
 
-  // Reset status and headlines when input is changed or cleared
-  sourceInput.addEventListener('input', () => {
-    resetBadges();
-    hideStatus();
-    if (!sourceInput.value.trim()) {
-      resetHeadlines();
-      resetLogs();
-    }
+    input.addEventListener('input', () => {
+      hideStatus();
+      if (!sourceInput1.value.trim() && !sourceInput2.value.trim()) {
+        resetHeadlines();
+        resetLogs();
+      }
+    });
   });
 });

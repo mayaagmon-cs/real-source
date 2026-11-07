@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Source Verification & Headlines</title>
+  <title>Sources Headline Diagnosis & Comparison</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="container">
     <div class="card">
-      <h1 class="title">Source Verification</h1>
-      <p class="subtitle">Quick verification for the term <strong class="target-word">איזנקוט</strong></p>
+      <h1 class="title">Sources Headline Diagnosis</h1>
+      <p class="subtitle">Extract and compare headlines across multiple sources</p>
 
       <!-- Initial state: Only "Enter source" button -->
       <div id="initial-view">
@@ -19,63 +19,99 @@
         </button>
       </div>
 
-      <!-- Second state: Input, "Check source" button, and HeadLines display -->
+      <!-- Second state: 2 source inputs, "Check Sources" button, and 2 HeadLines outputs -->
       <div id="input-view" class="hidden">
-        <div class="input-row">
-          <div class="input-wrapper">
-            <label for="source-input" class="sr-only">Source URL or Text</label>
+        <!-- Dual Source Input Grid -->
+        <div class="sources-dual-grid">
+          <div class="source-input-group">
+            <label for="source-input-1" class="input-label">Source 1</label>
             <textarea
-              id="source-input"
+              id="source-input-1"
               class="text-input"
               rows="2"
-              placeholder="Enter source URL (e.g. https://...) or paste text directly..."
+              placeholder="Enter first source URL (e.g. https://...) or paste text..."
               autocomplete="off"
             ></textarea>
+            <!-- Badge preserved for target text verification -->
+            <div id="input-badge-1" class="result-badge hidden" aria-live="polite"></div>
           </div>
-          <!-- V mark or X mark next to text box -->
-          <div id="input-badge" class="result-badge hidden" aria-live="polite"></div>
+
+          <div class="source-input-group">
+            <label for="source-input-2" class="input-label">Source 2</label>
+            <textarea
+              id="source-input-2"
+              class="text-input"
+              rows="2"
+              placeholder="Enter second source URL (e.g. https://...) or paste text..."
+              autocomplete="off"
+            ></textarea>
+            <!-- Badge preserved for target text verification -->
+            <div id="input-badge-2" class="result-badge hidden" aria-live="polite"></div>
+          </div>
         </div>
 
         <div class="button-row">
           <button id="check-source-btn" class="btn primary-btn" type="button">
-            Check source
+            Check Sources
           </button>
-          <!-- Red X mark next to button if not found -->
+          <!-- Badge preserved next to button -->
           <div id="button-badge" class="result-badge hidden" aria-live="polite"></div>
         </div>
 
         <div id="status-message" class="status-message hidden" role="status"></div>
 
-        <!-- HeadLines section -->
-        <div class="headlines-section">
-          <div class="headlines-header">
-            <label for="headlines-output" class="headlines-title">HeadLines</label>
-            <div class="headlines-controls">
-              <span id="headlines-count" class="headlines-count hidden"></span>
-              <button id="toggle-log-btn" type="button" class="log-toggle-btn" title="Toggle Scraping Engine Inspection Log">
-                Inspection Log
-              </button>
+        <!-- Dual HeadLines Display Grid -->
+        <div class="headlines-dual-grid">
+          <!-- HeadLines 1 -->
+          <div class="headlines-box-wrapper">
+            <div class="headlines-header">
+              <label for="headlines-output-1" class="headlines-title">HeadLines 1</label>
+              <span id="headlines-count-1" class="headlines-count hidden"></span>
             </div>
+            <textarea
+              id="headlines-output-1"
+              class="text-input headlines-textarea"
+              rows="8"
+              readonly
+              placeholder="Headlines from Source 1 will be presented here..."
+            ></textarea>
           </div>
-          <textarea
-            id="headlines-output"
-            class="text-input headlines-textarea"
-            rows="8"
-            readonly
-            placeholder="Headlines diagnosed through the upgraded scraping engine will be presented here..."
-          ></textarea>
 
-          <!-- Scraping Engine Inspection & Diagnostics Panel -->
+          <!-- HeadLines 2 -->
+          <div class="headlines-box-wrapper">
+            <div class="headlines-header">
+              <label for="headlines-output-2" class="headlines-title">HeadLines 2</label>
+              <span id="headlines-count-2" class="headlines-count hidden"></span>
+            </div>
+            <textarea
+              id="headlines-output-2"
+              class="text-input headlines-textarea"
+              rows="8"
+              readonly
+              placeholder="Headlines from Source 2 will be presented here..."
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- Scraping Engine Diagnostics & Inspection Panel -->
+        <div class="inspection-panel-wrapper">
+          <div class="inspection-toggle-bar">
+            <button id="toggle-log-btn" type="button" class="log-toggle-btn" title="Toggle Scraping Engine Inspection Log">
+              Inspection Log
+            </button>
+            <span id="bot-shield-status" class="bot-badge badge-neutral">Ready</span>
+          </div>
+
           <div id="scraping-log-panel" class="scraping-log-panel hidden">
             <div class="log-panel-header">
               <div class="log-panel-title">
                 <span class="terminal-dot"></span> Scraping Engine Inspection & Diagnostic Log
               </div>
-              <span id="bot-shield-status" class="bot-badge badge-neutral">Ready</span>
             </div>
             <pre id="scraping-log-content" class="log-content">Waiting for inspection run...</pre>
           </div>
         </div>
+
       </div>
     </div>
   </main>
