@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Source Verification</title>
+  <title>Source Verification & Headlines</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,7 +19,7 @@
         </button>
       </div>
 
-      <!-- Second state: Input and "Check source" button -->
+      <!-- Second state: Input, "Check source" button, and HeadLines display -->
       <div id="input-view" class="hidden">
         <div class="input-row">
           <div class="input-wrapper">
@@ -45,6 +45,21 @@
         </div>
 
         <div id="status-message" class="status-message hidden" role="status"></div>
+
+        <!-- HeadLines section -->
+        <div class="headlines-section">
+          <div class="headlines-header">
+            <label for="headlines-output" class="headlines-title">HeadLines</label>
+            <span id="headlines-count" class="headlines-count hidden"></span>
+          </div>
+          <textarea
+            id="headlines-output"
+            class="text-input headlines-textarea"
+            rows="6"
+            readonly
+            placeholder="All headlines from the source will be presented here..."
+          ></textarea>
+        </div>
       </div>
     </div>
   </main>

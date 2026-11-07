@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const inputBadge = document.getElementById('input-badge');
   const buttonBadge = document.getElementById('button-badge');
   const statusMessage = document.getElementById('status-message');
+  const headlinesOutput = document.getElementById('headlines-output');
+  const headlinesCount = document.getElementById('headlines-count');
 
   const TARGET_TEXT = 'איזנקוט';
 
@@ -23,31 +25,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
     resetBadges();
     hideStatus();
+    resetHeadlines();
 
     if (!rawInput) {
       showStatus('Please enter a source URL or paste text to check.', 'error');
       showErrorBadges();
+      headlinesOutput.value = '';
       sourceInput.focus();
       return;
     }
 
     setLoadingState(true);
+    headlinesOutput.value = 'Fetching source and extracting headlines...';
 
     try {
       let isFound = false;
+      let content = '';
 
-      // 1. Direct text check: If user typed or pasted text containing the target
+      // 1. Direct text check: Check if entered string contains the target word
       if (rawInput.includes(TARGET_TEXT)) {
         isFound = true;
-      } else if (looksLikeUrl(rawInput)) {
-        // 2. If it's a URL, fetch content using multi-proxy fallback
-        const content = await fetchPageContent(rawInput);
+      }
+
+      // 2. Fetch page content if input is a URL
+      if (looksLikeUrl(rawInput)) {
+        content = await fetchPageContent(rawInput);
         if (content && content.includes(TARGET_TEXT)) {
           isFound = true;
         }
+      } else {
+        content = rawInput;
       }
 
       setLoadingState(false);
+
+      // 3. Extract and display all headlines
+      const headlines = extractHeadlines(content || rawInput);
+      displayHeadlines(headlines);
 
       if (isFound) {
         showSuccessBadge();
@@ -59,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       setLoadingState(false);
       showErrorBadges();
+      headlinesOutput.value = `Could not extract headlines: ${err.message || 'Verification failed.'}`;
       showStatus(
         `${err.message || 'Verification failed.'} Tip: You can also copy and paste the article text directly into the box.`,
         'error'
@@ -71,16 +86,119 @@ document.addEventListener('DOMContentLoaded', () => {
     return /^https?:\/\//i.test(text) || (!text.includes(' ') && /^[a-z0-9-]+(\.[a-z]{2,})+/i.test(text));
   }
 
-  // Robust multi-strategy fetch engine with Jina Reader as primary
+  // Extract headlines from HTML, Markdown, or plain text
+  function extractHeadlines(rawContent) {
+    if (!rawContent || typeof rawContent !== 'string') return [];
+
+    const headlines = [];
+    const seen = new Set();
+
+    function addHeadline(text) {
+      if (!text) return;
+      let cleaned = text
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // remove markdown links [title](url)
+        .replace(/[*_`~]/g, '')                   // remove markdown formatting
+        .replace(/<[^>]*>/g, '')                  // strip inline html tags
+        .replace(/^[\s#*>\-–—:•\d.]+\s*/, '')     // remove leading numbers, bullets, hashes
+        .trim();
+
+      if (cleaned.length < 3 || cleaned.length > 300) return;
+
+      // Filter out typical non-headline navigational text
+      const lower = cleaned.toLowerCase();
+      const commonUi = [
+        'navigation', 'menu', 'search', 'skip to content', 'advertisement', 'share',
+        'comments', 'footer', 'header', 'cookie policy', 'privacy policy', 'terms of service',
+        'תפריט', 'ניווט', 'חיפוש', 'שיתוף', 'תגובות', 'פרסומת', 'דלג לתוכן', 'עקבו אחרינו'
+      ];
+      if (commonUi.includes(lower)) return;
+
+      const dedupeKey = lower.replace(/\s+/g, ' ');
+      if (!seen.has(dedupeKey)) {
+        seen.add(dedupeKey);
+        headlines.push(cleaned);
+      }
+    }
+
+    // 1. If content contains HTML tags, parse with DOMParser
+    if (/<(h[1-6]|title|header|article)/i.test(rawContent)) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(rawContent, 'text/html');
+
+        if (doc.title) {
+          addHeadline(doc.title);
+        }
+
+        const headingElements = doc.querySelectorAll('h1, h2, h3, h4, .headline, [class*="headline"], [class*="Headline"], [class*="title"]');
+        headingElements.forEach((el) => {
+          addHeadline(el.textContent);
+        });
+      } catch (_) {
+        // Fallback to text parsing
+      }
+    }
+
+    // 2. Extract Markdown / Jina Reader titles
+    const lines = rawContent.split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      // Jina "Title: ..."
+      if (/^Title:\s*(.+)$/i.test(trimmed)) {
+        const match = trimmed.match(/^Title:\s*(.+)$/i);
+        if (match && match[1]) addHeadline(match[1]);
+      }
+      // Markdown headings (#, ##, ###, ####)
+      else if (/^#{1,4}\s+(.+)$/.test(trimmed)) {
+        const match = trimmed.match(/^#{1,4}\s+(.+)$/);
+        if (match && match[1]) addHeadline(match[1]);
+      }
+    }
+
+    // 3. Fallback: if no headings were found and user pasted raw text lines
+    if (headlines.length === 0) {
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.length > 5 && trimmed.length < 200) {
+          addHeadline(trimmed);
+          if (headlines.length >= 6) break;
+        }
+      }
+    }
+
+    return headlines;
+  }
+
+  function displayHeadlines(headlines) {
+    if (headlines && headlines.length > 0) {
+      headlinesOutput.value = headlines
+        .map((item, idx) => `${idx + 1}. ${item}`)
+        .join('\n\n');
+      headlinesCount.textContent = `${headlines.length} headlines`;
+      headlinesCount.classList.remove('hidden');
+    } else {
+      headlinesOutput.value = 'No headlines were detected in this source.';
+      headlinesCount.classList.add('hidden');
+    }
+  }
+
+  function resetHeadlines() {
+    headlinesOutput.value = '';
+    headlinesCount.textContent = '';
+    headlinesCount.classList.add('hidden');
+  }
+
+  // Multi-strategy fetch engine with Jina Reader as primary
   async function fetchPageContent(inputUrl) {
     let url = inputUrl.trim();
     if (!/^https?:\/\//i.test(url)) {
       url = 'https://' + url;
     }
 
-    // List of scrapers/proxies to attempt in order
     const strategies = [
-      // 1. Jina Reader: Bypasses Cloudflare & Bot-shields, renders JS sites (e.g. Ynet, Walla, etc.)
+      // 1. Jina Reader: Renders modern JS news sites and bypasses cloudflare/bot-shields
       async (target) => {
         const controller = new AbortController();
         const tId = setTimeout(() => controller.abort(), 12000);
@@ -146,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return content;
         }
       } catch (_) {
-        // Try next fallback
+        // Continue to next fallback
       }
     }
 
@@ -161,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
       inputBadge.innerHTML = '<div class="spinner"></div>';
       inputBadge.classList.remove('hidden');
       buttonBadge.classList.add('hidden');
-      showStatus('Fetching and analyzing source (this may take a few seconds)...', 'info');
+      showStatus('Fetching source and analyzing headlines...', 'info');
     } else {
       checkSourceBtn.disabled = false;
       checkSourceBtn.textContent = 'Check source';
@@ -213,9 +331,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Reset status when user changes input
+  // Reset status and headlines when input is changed or cleared
   sourceInput.addEventListener('input', () => {
     resetBadges();
     hideStatus();
+    if (!sourceInput.value.trim()) {
+      resetHeadlines();
+    }
   });
 });
