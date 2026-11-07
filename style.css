@@ -60,7 +60,7 @@ body {
 .subtitle {
   color: var(--text-secondary);
   font-size: 0.95rem;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .btn {
@@ -70,7 +70,7 @@ body {
   font-family: inherit;
   font-size: 1rem;
   font-weight: 600;
-  padding: 14px 32px;
+  padding: 14px 36px;
   border-radius: 10px;
   border: none;
   cursor: pointer;
@@ -79,8 +79,8 @@ body {
 }
 
 .btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  opacity: 0.7;
+  cursor: wait;
 }
 
 .primary-btn {
@@ -106,7 +106,7 @@ body {
 #input-view {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   animation: fadeIn 0.3s ease forwards;
 }
 
@@ -152,7 +152,7 @@ body {
   border-radius: 10px;
   outline: none;
   resize: vertical;
-  min-height: 56px;
+  min-height: 60px;
   max-height: 160px;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -172,6 +172,49 @@ body {
   justify-content: center;
   gap: 12px;
   margin-top: 4px;
+}
+
+/* Quick Helpers Row */
+.quick-helpers-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.helpers-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.chip-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.chip-btn.chip-clear {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.chip-btn.chip-clear:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.5);
 }
 
 /* Status Badges */
@@ -201,19 +244,11 @@ body {
   color: var(--error-color);
 }
 
-.spinner {
-  width: 18px;
-  height: 18px;
-  border: 3px solid rgba(59, 130, 246, 0.2);
-  border-top-color: var(--primary-accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
 .status-message {
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 500;
   line-height: 1.5;
-  padding: 12px 16px;
+  padding: 12px 18px;
   border-radius: 10px;
   text-align: center;
   animation: fadeIn 0.2s ease forwards;
@@ -232,8 +267,8 @@ body {
 }
 
 .status-message.info {
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
   color: #93c5fd;
 }
 
@@ -312,7 +347,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .inspection-toggle-bar {

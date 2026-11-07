@@ -1,746 +1,649 @@
-// Source Verification & Dual Headline Diagnosis Engine
-(function () {
-  function initApp() {
-    const checkSourceBtn = document.getElementById('check-source-btn');
+// Sources Headline Diagnosis & Comparison Engine
+// Preserved target verification code
+const TARGET_TEXT = 'איזנקוט';
 
-    // Dual Source Inputs
-    const sourceInput1 = document.getElementById('source-input-1');
-    const sourceInput2 = document.getElementById('source-input-2');
+function verifyTargetText(text) {
+  if (!text || typeof text !== 'string') return false;
+  return text.includes(TARGET_TEXT);
+}
 
-    // Dual HeadLines Outputs & Counters
-    const headlinesOutput1 = document.getElementById('headlines-output-1');
-    const headlinesOutput2 = document.getElementById('headlines-output-2');
-    const headlinesCount1 = document.getElementById('headlines-count-1');
-    const headlinesCount2 = document.getElementById('headlines-count-2');
+// Global logger entries
+const scrapingLogEntries = [];
 
-    // Status and Inspection Logs
-    const statusMessage = document.getElementById('status-message');
-    const toggleLogBtn = document.getElementById('toggle-log-btn');
-    const scrapingLogPanel = document.getElementById('scraping-log-panel');
-    const scrapingLogContent = document.getElementById('scraping-log-content');
-    const botShieldStatus = document.getElementById('bot-shield-status');
+function addInspectionLog(message, type = 'info') {
+  const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌', scroll: '📜', engine: '⚙️' };
+  const prefix = icons[type] || '•';
+  const line = `[${timestamp}] ${prefix} ${message}`;
+  scrapingLogEntries.push(line);
+  console.log(line);
 
-    // Preserved badges for target verification (retained as requested)
-    const inputBadge1 = document.getElementById('input-badge-1');
-    const inputBadge2 = document.getElementById('input-badge-2');
-    const buttonBadge = document.getElementById('button-badge');
+  const logContent = document.getElementById('scraping-log-content');
+  if (logContent) {
+    logContent.textContent = scrapingLogEntries.join('\n');
+    logContent.scrollTop = logContent.scrollHeight;
+  }
+}
 
-    // =========================================================================
-    // Target Word Verification Logic (Preserved as requested, not active on click)
-    // =========================================================================
-    const TARGET_TEXT = 'איזנקוט';
+function resetInspectionLogs() {
+  scrapingLogEntries.length = 0;
+  const logContent = document.getElementById('scraping-log-content');
+  if (logContent) logContent.textContent = '';
+  setInspectionBotBadge('Ready', 'neutral');
+}
 
-    function verifyTargetText(text) {
-      if (!text || typeof text !== 'string') return false;
-      return text.includes(TARGET_TEXT);
+function setInspectionBotBadge(text, state) {
+  const badge = document.getElementById('bot-shield-status');
+  if (!badge) return;
+  badge.textContent = text;
+  badge.className = `bot-badge badge-${state}`;
+}
+
+function toggleInspectionLog() {
+  const panel = document.getElementById('scraping-log-panel');
+  const btn = document.getElementById('toggle-log-btn');
+  if (!panel) return;
+  panel.classList.toggle('hidden');
+  if (btn) {
+    btn.textContent = panel.classList.contains('hidden') ? 'Inspection Log' : 'Hide Log';
+  }
+}
+
+// Quick Test Helpers
+function loadSampleArticles() {
+  const s1 = document.getElementById('source-input-1');
+  const s2 = document.getElementById('source-input-2');
+  if (s1) {
+    s1.value = 
+`# מבזק מדיני: המגעים להסדרה אזורית נכנסים לשלב מכריע
+השליח המיוחד הגיע לסבב שיחות בביירות ובירושלים. גורמים ביטחוניים מעריכים כי ישנה התקדמות משמעותית.
+## תנאי המפתח להסכם על פי מערכת הביטחון
+- [דרישה לחופש פעולה מבצעי במקרה של הפרת ההסכם](https://example.com/item1)
+- [פריסת כוחות בינלאומיים לאורך קו הגבול](https://example.com/item2)`;
+  }
+  if (s2) {
+    s2.value = 
+`# סקירת שוק ההון: מדדי המניות ננעלו בעליות שערים
+המסחר בבורסה ננעל במגמה חיובית על רקע יציבות שער החליפין ודוחות החברות המובילות.
+## המניות והענפים הבולטים של יום המסחר
+- [סקטור הבנקים הוביל את העליות במחזורים ערים](https://example.com/stock1)
+- [מניות הטכנולוגיה רשמו התאוששות לאחר שבועות של ירידות](https://example.com/stock2)`;
+  }
+  showStatusMessage('Sample articles loaded into Source 1 and Source 2. Click "Check Sources" to run!', 'info');
+}
+
+function loadSampleUrls() {
+  const s1 = document.getElementById('source-input-1');
+  const s2 = document.getElementById('source-input-2');
+  if (s1) s1.value = 'https://he.wikipedia.org/wiki/גדי_איזנקוט';
+  if (s2) s2.value = 'https://example.com';
+  showStatusMessage('Sample URLs loaded. Click "Check Sources" to scrape and diagnose!', 'info');
+}
+
+function clearAllSources() {
+  const s1 = document.getElementById('source-input-1');
+  const s2 = document.getElementById('source-input-2');
+  const o1 = document.getElementById('headlines-output-1');
+  const o2 = document.getElementById('headlines-output-2');
+  const c1 = document.getElementById('headlines-count-1');
+  const c2 = document.getElementById('headlines-count-2');
+  if (s1) s1.value = '';
+  if (s2) s2.value = '';
+  if (o1) o1.value = '';
+  if (o2) o2.value = '';
+  if (c1) { c1.textContent = ''; c1.classList.add('hidden'); }
+  if (c2) { c2.textContent = ''; c2.classList.add('hidden'); }
+  hideStatusMessage();
+  resetInspectionLogs();
+}
+
+function showStatusMessage(text, type = 'info') {
+  const el = document.getElementById('status-message');
+  if (!el) return;
+  el.textContent = text;
+  el.className = `status-message ${type}`;
+  el.classList.remove('hidden');
+}
+
+function hideStatusMessage() {
+  const el = document.getElementById('status-message');
+  if (!el) return;
+  el.classList.add('hidden');
+  el.textContent = '';
+}
+
+function looksLikeUrl(text) {
+  if (!text || text.includes('\n')) return false;
+  return /^https?:\/\//i.test(text) || (!text.includes(' ') && /^[a-z0-9-]+(\.[a-z]{2,})+/i.test(text));
+}
+
+// =========================================================================
+// Main "Check Sources" Action Handler (Directly exposed on window)
+// =========================================================================
+async function handleCheckSources() {
+  console.log('⚡ Check Sources triggered');
+
+  const s1El = document.getElementById('source-input-1');
+  const s2El = document.getElementById('source-input-2');
+  const o1El = document.getElementById('headlines-output-1');
+  const o2El = document.getElementById('headlines-output-2');
+  const c1El = document.getElementById('headlines-count-1');
+  const c2El = document.getElementById('headlines-count-2');
+  const btn = document.getElementById('check-source-btn');
+
+  const in1 = s1El ? s1El.value.trim() : '';
+  const in2 = s2El ? s2El.value.trim() : '';
+
+  hideStatusMessage();
+  resetInspectionLogs();
+
+  if (!in1 && !in2) {
+    showStatusMessage('Please enter a source URL or paste text into Source 1 or Source 2.', 'error');
+    if (o1El) o1El.value = 'Please enter a source URL or paste article text into Source 1 above.';
+    if (o2El) o2El.value = 'Please enter a source URL or paste article text into Source 2 above.';
+    if (s1El) s1El.focus();
+    return;
+  }
+
+  // Update button state immediately
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Checking Sources...';
+  }
+  showStatusMessage('Scraping and diagnosing sources... Please wait.', 'info');
+  addInspectionLog('Starting diagnosis across provided sources...', 'engine');
+
+  const tasks = [];
+
+  // Source 1
+  if (in1) {
+    if (o1El) o1El.value = '⏳ Scraping and diagnosing Source 1... Please wait.';
+    tasks.push(processSingleSource(in1, 1, o1El, c1El));
+  } else {
+    if (o1El) o1El.value = 'No source entered for Source 1.';
+    if (c1El) c1El.classList.add('hidden');
+  }
+
+  // Source 2
+  if (in2) {
+    if (o2El) o2El.value = '⏳ Scraping and diagnosing Source 2... Please wait.';
+    tasks.push(processSingleSource(in2, 2, o2El, c2El));
+  } else {
+    if (o2El) o2El.value = 'No source entered for Source 2.';
+    if (c2El) c2El.classList.add('hidden');
+  }
+
+  try {
+    await Promise.allSettled(tasks);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Check Sources';
+    }
+    showStatusMessage('Source headlines diagnosed and displayed successfully!', 'success');
+    addInspectionLog('All source diagnosis tasks completed.', 'success');
+  } catch (err) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Check Sources';
+    }
+    showStatusMessage(`Diagnosis finished with notice: ${err.message}`, 'error');
+    addInspectionLog(`Error: ${err.message}`, 'error');
+  }
+}
+
+// Process an individual source independently
+async function processSingleSource(rawInput, sourceNum, outputEl, countEl) {
+  try {
+    addInspectionLog(`[Source ${sourceNum}] Initializing extraction...`);
+    let content = rawInput;
+    let fetchReport = { provider: 'direct', isBotShielded: false, httpStatus: 200, antiBotNote: '' };
+
+    if (looksLikeUrl(rawInput)) {
+      addInspectionLog(`[Source ${sourceNum}] Target URL: ${rawInput}`);
+      addInspectionLog(`[Source ${sourceNum}] Fetching via dynamic scraper...`, 'engine');
+      const res = await fetchSourceUrl(rawInput, sourceNum);
+      content = res.content;
+      fetchReport = res.report;
+    } else {
+      addInspectionLog(`[Source ${sourceNum}] Direct text/HTML detected. Bypassing network fetch.`);
     }
 
-    function showSuccessBadge(badgeEl) {
-      if (!badgeEl) return;
-      badgeEl.className = 'result-badge badge-success';
-      badgeEl.innerHTML = '&#10004;';
-      badgeEl.classList.remove('hidden');
-    }
+    addInspectionLog(`[Source ${sourceNum}] Running headline extraction engine...`, 'engine');
+    const diagnosed = extractHeadlinesFromContent(content || rawInput, sourceNum);
+    renderHeadlinesOutput(diagnosed, outputEl, countEl, sourceNum);
 
-    function showErrorBadge(badgeEl) {
-      if (!badgeEl) return;
-      badgeEl.className = 'result-badge badge-error';
-      badgeEl.innerHTML = '&#10006;';
-      badgeEl.classList.remove('hidden');
+    if (fetchReport.isBotShielded) {
+      setInspectionBotBadge('Shield Detected', 'error');
+      addInspectionLog(`[Source ${sourceNum}] Notice: Remote site returned bot challenge (${fetchReport.antiBotNote})`, 'warning');
+    } else if (diagnosed.totalCount === 0) {
+      addInspectionLog(`[Source ${sourceNum}] Notice: 0 headlines found in this source.`, 'warning');
+    } else {
+      setInspectionBotBadge('Clean Render', 'success');
+      addInspectionLog(`[Source ${sourceNum}] Succeeded: ${diagnosed.totalCount} headlines extracted.`, 'success');
     }
-
-    function resetBadges() {
-      [inputBadge1, inputBadge2, buttonBadge].forEach((b) => {
-        if (b) {
-          b.className = 'result-badge hidden';
-          b.innerHTML = '';
-        }
-      });
+  } catch (err) {
+    if (outputEl) {
+      outputEl.value = `❌ Source ${sourceNum} Notice: ${err.message || 'Extraction failed.'}\n\nTip: You can copy and paste the article text or HTML directly into the box above.`;
     }
+    if (countEl) countEl.classList.add('hidden');
+    addInspectionLog(`[Source ${sourceNum}] Scraping error: ${err.message}`, 'error');
+  }
+}
 
-    // Toggle log panel visibility
-    if (toggleLogBtn && scrapingLogPanel) {
-      toggleLogBtn.addEventListener('click', () => {
-        scrapingLogPanel.classList.toggle('hidden');
-        toggleLogBtn.textContent = scrapingLogPanel.classList.contains('hidden') ? 'Inspection Log' : 'Hide Log';
-      });
+// =========================================================================
+// Fast, CORS-Safe Fetch Engine (Standard headers only to prevent CORS preflight freezes)
+// =========================================================================
+async function fetchSourceUrl(inputUrl, sourceNum = 1) {
+  let url = inputUrl.trim();
+  if (!/^https?:\/\//i.test(url)) {
+    url = 'https://' + url;
+  }
+
+  const report = {
+    provider: '',
+    isBotShielded: false,
+    httpStatus: 200,
+    antiBotNote: ''
+  };
+
+  function checkShield(text) {
+    if (!text || typeof text !== 'string') return null;
+    const lower = text.toLowerCase();
+    if (lower.includes('attention required! | cloudflare') || lower.includes('cf-browser-verification')) {
+      return 'Cloudflare Verification Challenge';
     }
+    if (lower.includes('just a moment...') && lower.includes('cloudflare')) {
+      return 'Cloudflare Under Attack Mode';
+    }
+    if (lower.includes('incapsula incident id') || lower.includes('powered by imperva')) {
+      return 'Imperva / Incapsula Bot Shield';
+    }
+    if (lower.includes('access denied') && lower.includes('403 forbidden')) {
+      return 'HTTP 403 Forbidden - Access Denied';
+    }
+    return null;
+  }
 
-    // Logger helpers
-    const logEntries = [];
-    function addLog(message, type = 'info') {
-      const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
-      const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌', scroll: '📜', engine: '⚙️' };
-      const prefix = icons[type] || '•';
-      const line = `[${timestamp}] ${prefix} ${message}`;
-      logEntries.push(line);
-      if (scrapingLogContent) {
-        scrapingLogContent.textContent = logEntries.join('\n');
-        scrapingLogContent.scrollTop = scrapingLogContent.scrollHeight;
+  // 1. Primary: Headless Jina Engine (standard Accept header only)
+  try {
+    addInspectionLog(`[Source ${sourceNum}] Requesting via headless reader...`);
+    const controller = new AbortController();
+    const tId = setTimeout(() => controller.abort(), 9000);
+
+    const res = await fetch(`https://r.jina.ai/${url}`, {
+      signal: controller.signal,
+      headers: { 'Accept': 'text/plain, text/html' }
+    });
+    clearTimeout(tId);
+
+    if (res.ok) {
+      const text = await res.text();
+      const shield = checkShield(text);
+      if (shield) {
+        report.isBotShielded = true;
+        report.antiBotNote = shield;
       }
-    }
-
-    function resetLogs() {
-      logEntries.length = 0;
-      if (scrapingLogContent) scrapingLogContent.textContent = '';
-      setBotBadge('Ready', 'neutral');
-    }
-
-    function setBotBadge(text, state) {
-      if (!botShieldStatus) return;
-      botShieldStatus.textContent = text;
-      botShieldStatus.className = `bot-badge badge-${state}`;
-    }
-
-    // =========================================================================
-    // Dual Source Check Action ("Check Sources")
-    // =========================================================================
-    async function handleCheckSources() {
-      const input1 = sourceInput1 ? sourceInput1.value.trim() : '';
-      const input2 = sourceInput2 ? sourceInput2.value.trim() : '';
-
-      resetBadges();
-      hideStatus();
-      resetHeadlines();
-      resetLogs();
-
-      if (!input1 && !input2) {
-        showStatus('Please enter at least one source URL or text to check.', 'error');
-        if (sourceInput1) sourceInput1.focus();
-        return;
-      }
-
-      setLoadingState(true);
-      addLog('Scraping engine initialized for multi-source inspection.', 'engine');
-
-      const tasks = [];
-
-      // Process Source 1
-      if (input1) {
-        if (headlinesOutput1) headlinesOutput1.value = '🔍 Scraping & diagnosing Source 1... Please wait.';
-        tasks.push(processSingleSource(input1, 1, headlinesOutput1, headlinesCount1));
-      } else {
-        if (headlinesOutput1) headlinesOutput1.value = 'No source entered for Source 1.';
-        if (headlinesCount1) headlinesCount1.classList.add('hidden');
-      }
-
-      // Process Source 2
-      if (input2) {
-        if (headlinesOutput2) headlinesOutput2.value = '🔍 Scraping & diagnosing Source 2... Please wait.';
-        tasks.push(processSingleSource(input2, 2, headlinesOutput2, headlinesCount2));
-      } else {
-        if (headlinesOutput2) headlinesOutput2.value = 'No source entered for Source 2.';
-        if (headlinesCount2) headlinesCount2.classList.add('hidden');
-      }
-
-      try {
-        await Promise.allSettled(tasks);
-        setLoadingState(false);
-        showStatus('Source headlines diagnosed and presented successfully!', 'success');
-        addLog('All source diagnosis tasks completed.', 'success');
-      } catch (e) {
-        setLoadingState(false);
-        showStatus(`Diagnosis completed with warnings: ${e.message}`, 'error');
+      if (text && text.length > 40) {
+        report.provider = 'Jina Reader Engine';
+        addInspectionLog(`[Source ${sourceNum}] Headless render received (${text.length} chars).`, 'success');
+        return { content: text, report };
       }
     }
+  } catch (e) {
+    addInspectionLog(`[Source ${sourceNum}] Reader fallback: ${e.message}`, 'warning');
+  }
 
-    // Process an individual source independently
-    async function processSingleSource(rawInput, sourceNum, outputEl, countEl) {
-      try {
-        addLog(`[Source ${sourceNum}] Initializing diagnosis...`);
-        let content = rawInput;
-        let fetchReport = { provider: 'direct', isBotShielded: false, httpStatus: 200, antiBotNote: '' };
+  // 2. Secondary: Fast Raw Proxy via AllOrigins
+  try {
+    addInspectionLog(`[Source ${sourceNum}] Requesting via raw CORS gateway...`);
+    const controller = new AbortController();
+    const tId = setTimeout(() => controller.abort(), 8000);
 
-        if (looksLikeUrl(rawInput)) {
-          addLog(`[Source ${sourceNum}] Target URL: ${rawInput}`);
-          addLog(`[Source ${sourceNum}] Executing fast dynamic scraper with network wait...`, 'engine');
-          addLog(`[Source ${sourceNum}] Simulating auto-scroll trigger for lazy-loaded items...`, 'scroll');
-          const res = await fetchPageContentFast(rawInput, sourceNum);
-          content = res.content;
-          fetchReport = res.report;
-        } else {
-          addLog(`[Source ${sourceNum}] Input is raw text/HTML snippet. Bypassing network fetch.`);
-        }
+    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, {
+      signal: controller.signal
+    });
+    clearTimeout(tId);
 
-        addLog(`[Source ${sourceNum}] Running multi-tiered extraction pipeline...`, 'engine');
-        const diagnosed = extractHeadlinesUpgraded(content || rawInput, rawInput, fetchReport, sourceNum);
-        renderDiagnosedHeadlines(diagnosed, outputEl, countEl, sourceNum);
+    if (res.ok) {
+      const text = await res.text();
+      const shield = checkShield(text);
+      if (shield) {
+        report.isBotShielded = true;
+        report.antiBotNote = shield;
+      }
+      if (text && text.length > 50) {
+        report.provider = 'AllOrigins Raw Proxy';
+        addInspectionLog(`[Source ${sourceNum}] Raw gateway content received.`, 'info');
+        return { content: text, report };
+      }
+    }
+  } catch (e) {
+    addInspectionLog(`[Source ${sourceNum}] Raw gateway fallback: ${e.message}`, 'warning');
+  }
 
-        if (fetchReport.isBotShielded) {
-          setBotBadge('Shield Detected', 'error');
-          addLog(`[Source ${sourceNum}] Anti-bot challenge flagged: ${fetchReport.antiBotNote}`, 'error');
-        } else if (diagnosed.totalCount === 0) {
-          addLog(`[Source ${sourceNum}] Warning: 0 headlines found.`, 'warning');
-        } else {
-          setBotBadge('Clean Render', 'success');
-          addLog(`[Source ${sourceNum}] Extraction succeeded: ${diagnosed.totalCount} headlines diagnosed.`, 'success');
-        }
-      } catch (err) {
-        if (outputEl) {
-          outputEl.value = `❌ Source ${sourceNum} Error: ${err.message || 'Diagnosis failed.'}\n\nTip: You can copy and paste the article text or HTML directly into the box.`;
-        }
-        if (countEl) countEl.classList.add('hidden');
-        addLog(`[Source ${sourceNum}] Scraping error: ${err.message}`, 'error');
+  // 3. Tertiary: CodeTabs Gateway
+  try {
+    addInspectionLog(`[Source ${sourceNum}] Requesting via secondary proxy...`);
+    const controller = new AbortController();
+    const tId = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, {
+      signal: controller.signal
+    });
+    clearTimeout(tId);
+
+    if (res.ok) {
+      const text = await res.text();
+      if (text && text.length > 50) {
+        report.provider = 'CodeTabs Proxy';
+        addInspectionLog(`[Source ${sourceNum}] Secondary gateway content received.`, 'info');
+        return { content: text, report };
+      }
+    }
+  } catch (e) {
+    addInspectionLog(`[Source ${sourceNum}] Secondary proxy failed: ${e.message}`, 'warning');
+  }
+
+  if (report.isBotShielded) {
+    throw new Error(`Target site blocked automated requests (${report.antiBotNote}).`);
+  }
+
+  throw new Error('Could not fetch URL content. Please check the URL or paste the article text directly.');
+}
+
+// =========================================================================
+// Headline Extraction Pipeline
+// =========================================================================
+function extractHeadlinesFromContent(rawContent, sourceNum = 1) {
+  if (!rawContent || typeof rawContent !== 'string') {
+    return { mainHeadline: '', subHeadline: '', allHeadlines: [], totalCount: 0 };
+  }
+
+  let mainHeadline = '';
+  let subHeadline = '';
+  const collected = [];
+  const seenKeys = new Set();
+
+  function decodeEntities(str) {
+    if (!str) return '';
+    const txt = document.createElement('textarea');
+    txt.innerHTML = str;
+    return txt.value;
+  }
+
+  function cleanString(str) {
+    if (!str) return '';
+    let cleaned = decodeEntities(str)
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')     // unwrap markdown links
+      .replace(/[*_`~#]/g, '')                      // strip markdown symbols
+      .replace(/<[^>]*>/g, '')                      // strip HTML tags
+      .replace(/[\u200E\u200F\u202A-\u202E]/g, '') // remove bidirectional marks
+      .replace(/^[\s*>\-–—:•\d.]+\s*/, '')         // remove leading bullets & dashes
+      .replace(/\s+/g, ' ')                         // collapse whitespace
+      .trim();
+
+    cleaned = cleaned.replace(/^["'״׳«»“”]+|["'״׳«»“”]+$/g, '').trim();
+    return cleaned;
+  }
+
+  function isBoilerplateOrNav(text) {
+    if (!text || text.length < 5) return true;
+    const lower = text.toLowerCase();
+    const blockedPhrases = [
+      'navigation', 'main menu', 'search', 'skip to content', 'advertisement', 'sponsored',
+      'share this', 'comments', 'footer', 'header', 'cookie policy', 'privacy policy',
+      'terms of service', 'terms of use', 'all rights reserved', 'subscribe', 'sign in',
+      'log in', 'read more', 'continue reading', 'related stories', 'recommended for you',
+      'תפריט', 'ניווט', 'חיפוש', 'שיתוף', 'תגובות', 'פרסומת', 'תוכן מקודם', 'דלג לתוכן',
+      'עקבו אחרינו', 'הרשמה לניוזלטר', 'התחברות', 'כל הזכויות שמורות', 'קרא עוד',
+      'כתבות נוספות', 'אולי יעניין אותך', 'מבזקים', 'שירות לקוחות', 'צור קשר'
+    ];
+    return blockedPhrases.some((p) => lower === p || lower.startsWith(p + ' ') || lower.endsWith(' ' + p));
+  }
+
+  function normalizeKey(str) {
+    return str.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  }
+
+  function registerHeadline(text, category = 'general') {
+    const cleaned = cleanString(text);
+    if (!cleaned || isBoilerplateOrNav(cleaned)) return;
+    if (!cleaned.includes(' ') && cleaned.length < 12) return;
+
+    const key = normalizeKey(cleaned);
+    if (!key || key.length < 4) return;
+
+    let existingIndex = -1;
+    for (let i = 0; i < collected.length; i++) {
+      const existingKey = normalizeKey(collected[i]);
+      if (existingKey === key) {
+        existingIndex = i;
+        break;
+      }
+      if (key.length > existingKey.length && key.includes(existingKey) && (existingKey.length / key.length) > 0.6) {
+        collected[i] = cleaned;
+        existingIndex = i;
+        break;
+      } else if (existingKey.length > key.length && existingKey.includes(key) && (key.length / existingKey.length) > 0.6) {
+        existingIndex = i;
+        break;
       }
     }
 
-    function looksLikeUrl(text) {
-      if (!text || text.includes('\n')) return false;
-      return /^https?:\/\//i.test(text) || (!text.includes(' ') && /^[a-z0-9-]+(\.[a-z]{2,})+/i.test(text));
+    if (existingIndex === -1) {
+      collected.push(cleaned);
+      seenKeys.add(key);
+
+      if (category === 'main' && !mainHeadline) {
+        mainHeadline = cleaned;
+      } else if (category === 'sub' && !subHeadline) {
+        subHeadline = cleaned;
+      }
     }
+  }
 
-    // =========================================================================
-    // Fast, CORS-Safe Scraping Engine
-    // =========================================================================
-    async function fetchPageContentFast(inputUrl, sourceNum = 1) {
-      let url = inputUrl.trim();
-      if (!/^https?:\/\//i.test(url)) {
-        url = 'https://' + url;
-      }
+  const isHtml = /<(html|head|body|article|main|section|div|p|h[1-6]|script|meta)/i.test(rawContent);
 
-      const report = {
-        provider: '',
-        isBotShielded: false,
-        httpStatus: 200,
-        antiBotNote: ''
-      };
+  if (isHtml) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(rawContent, 'text/html');
 
-      function detectBotShields(text) {
-        if (!text || typeof text !== 'string') return null;
-        const lower = text.toLowerCase();
-
-        if (lower.includes('attention required! | cloudflare') || lower.includes('cf-browser-verification')) {
-          return 'Cloudflare Security Challenge / Browser Verification';
-        }
-        if (lower.includes('just a moment...') && lower.includes('cloudflare')) {
-          return 'Cloudflare "Just a moment..." Under Attack Mode';
-        }
-        if (lower.includes('incapsula incident id') || lower.includes('powered by imperva')) {
-          return 'Imperva / Incapsula Bot Shield';
-        }
-        if (lower.includes('access denied') && lower.includes('403 forbidden')) {
-          return 'HTTP 403 Forbidden - Access Denied by WAF';
-        }
-        if (lower.includes('challenge-platform') || lower.includes('captcha-delivery')) {
-          return 'Automated CAPTCHA Delivery Detected';
-        }
-        return null;
-      }
-
-      // Strategy 1: Headless SPA Engine via Jina Reader (with safelisted headers to avoid CORS preflight rejection)
-      try {
-        addLog(`[Source ${sourceNum}] Fetching via dynamic headless engine...`);
-        const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), 10000);
-
-        const res = await fetch(`https://r.jina.ai/${url}`, {
-          signal: controller.signal,
-          headers: {
-            'Accept': 'text/plain, text/html'
-          }
-        });
-        clearTimeout(tId);
-
-        report.httpStatus = res.status;
-
-        if (res.ok) {
-          const text = await res.text();
-          const shield = detectBotShields(text);
-
-          if (shield) {
-            report.isBotShielded = true;
-            report.antiBotNote = shield;
-            addLog(`[Source ${sourceNum}] Provider flagged anti-bot challenge: ${shield}`, 'warning');
-          } else if (text && text.length > 40) {
-            report.provider = 'Jina Dynamic Headless Engine';
-            addLog(`[Source ${sourceNum}] Headless render received successfully.`, 'success');
-            return { content: text, report };
-          }
-        }
-      } catch (e) {
-        addLog(`[Source ${sourceNum}] Primary headless engine failed or timed out: ${e.message}`, 'warning');
-      }
-
-      // Strategy 2: Fast Raw Proxy via AllOrigins
-      try {
-        addLog(`[Source ${sourceNum}] Attempting fast raw proxy gateway...`);
-        const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), 8000);
-
-        const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, {
-          signal: controller.signal
-        });
-        clearTimeout(tId);
-
-        if (res.ok) {
-          const text = await res.text();
-          const shield = detectBotShields(text);
-          if (shield) {
-            report.isBotShielded = true;
-            report.antiBotNote = shield;
-          }
-          if (text && text.length > 50) {
-            report.provider = 'AllOrigins Raw Proxy';
-            addLog(`[Source ${sourceNum}] Raw proxy stream received successfully.`, 'info');
-            return { content: text, report };
-          }
-        }
-      } catch (e) {
-        addLog(`[Source ${sourceNum}] Raw proxy failed: ${e.message}`, 'warning');
-      }
-
-      // Strategy 3: CodeTabs CORS Gateway
-      try {
-        addLog(`[Source ${sourceNum}] Attempting secondary CORS gateway...`);
-        const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), 8000);
-
-        const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, {
-          signal: controller.signal
-        });
-        clearTimeout(tId);
-
-        if (res.ok) {
-          const text = await res.text();
-          const shield = detectBotShields(text);
-          if (shield) {
-            report.isBotShielded = true;
-            report.antiBotNote = shield;
-          }
-          if (text && text.length > 50) {
-            report.provider = 'CodeTabs Gateway';
-            addLog(`[Source ${sourceNum}] Secondary CORS gateway response received.`, 'info');
-            return { content: text, report };
-          }
-        }
-      } catch (e) {
-        addLog(`[Source ${sourceNum}] Secondary gateway failed: ${e.message}`, 'warning');
-      }
-
-      if (report.isBotShielded) {
-        throw new Error(`Target website blocked automated access (${report.antiBotNote}).`);
-      }
-
-      throw new Error('Unable to retrieve content from the URL. Please verify the link or paste the text directly.');
-    }
-
-    // =========================================================================
-    // Multi-Tiered Headline Extraction Engine
-    // =========================================================================
-    function extractHeadlinesUpgraded(rawContent, originalInput, fetchReport, sourceNum = 1) {
-      if (!rawContent || typeof rawContent !== 'string') {
-        return { mainHeadline: '', subHeadline: '', allHeadlines: [], totalCount: 0 };
-      }
-
-      let mainHeadline = '';
-      let subHeadline = '';
-      const collected = [];
-      const seenMap = new Map();
-
-      function decodeEntities(str) {
-        if (!str) return '';
-        const txt = document.createElement('textarea');
-        txt.innerHTML = str;
-        return txt.value;
-      }
-
-      function cleanString(str) {
-        if (!str) return '';
-        let cleaned = decodeEntities(str)
-          .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')     // unwrap markdown links
-          .replace(/[*_`~#]/g, '')                      // strip markdown symbols & hashes
-          .replace(/<[^>]*>/g, '')                      // strip HTML tags
-          .replace(/[\u200E\u200F\u202A-\u202E]/g, '') // remove bidirectional marks
-          .replace(/^[\s*>\-–—:•\d.]+\s*/, '')         // remove leading bullets & dashes
-          .replace(/\s+/g, ' ')                         // collapse whitespace
-          .trim();
-
-        cleaned = cleaned.replace(/^["'״׳«»“”]+|["'״׳«»“”]+$/g, '').trim();
-        return cleaned;
-      }
-
-      function isBoilerplateOrNav(text) {
-        if (!text || text.length < 5) return true;
-        const lower = text.toLowerCase();
-
-        const blockedPhrases = [
-          'navigation', 'main menu', 'search', 'skip to content', 'advertisement', 'sponsored',
-          'share this', 'comments', 'footer', 'header', 'cookie policy', 'privacy policy',
-          'terms of service', 'terms of use', 'all rights reserved', 'subscribe', 'sign in',
-          'log in', 'read more', 'continue reading', 'related stories', 'recommended for you',
-          'popular stories', 'trending now', 'follow us', 'latest news', 'contact us',
-          'תפריט', 'ניווט', 'חיפוש', 'שיתוף', 'תגובות', 'פרסומת', 'תוכן מקודם', 'דלג לתוכן',
-          'עקבו אחרינו', 'הרשמה לניוזלטר', 'התחברות', 'כל הזכויות שמורות', 'קרא עוד',
-          'כתבות נוספות', 'אולי יעניין אותך', 'מבזקים', 'שירות לקוחות', 'צור קשר',
-          'תנאי שימוש', 'מדיניות פרטיות', 'דף הבית'
-        ];
-
-        return blockedPhrases.some((p) => lower === p || lower.startsWith(p + ' ') || lower.endsWith(' ' + p));
-      }
-
-      function normalizeKey(str) {
-        return str.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
-      }
-
-      function registerHeadline(text, category = 'general') {
-        const cleaned = cleanString(text);
-        if (!cleaned || isBoilerplateOrNav(cleaned)) return;
-        if (!cleaned.includes(' ') && cleaned.length < 12) return;
-
-        const key = normalizeKey(cleaned);
-        if (!key || key.length < 4) return;
-
-        let existingIndex = -1;
-        for (let i = 0; i < collected.length; i++) {
-          const existingKey = normalizeKey(collected[i]);
-          if (existingKey === key) {
-            existingIndex = i;
-            break;
-          }
-          if (key.length > existingKey.length && key.includes(existingKey) && existingKey.length / key.length > 0.6) {
-            collected[i] = cleaned;
-            existingIndex = i;
-            break;
-          } else if (existingKey.length > key.length && existingKey.includes(key) && key.length / existingKey.length > 0.6) {
-            existingIndex = i;
-            break;
-          }
-        }
-
-        if (existingIndex === -1) {
-          collected.push(cleaned);
-          seenMap.set(key, cleaned);
-
-          if (category === 'main' && !mainHeadline) {
-            mainHeadline = cleaned;
-          } else if (category === 'sub' && !subHeadline) {
-            subHeadline = cleaned;
-          }
-        }
-      }
-
-      const isHtmlContent = /<(html|head|body|article|main|section|div|p|h[1-6]|script|meta)/i.test(rawContent);
-
-      if (isHtmlContent) {
+      // Next.js & Nuxt SPA state
+      const nextData = doc.getElementById('__NEXT_DATA__');
+      if (nextData) {
         try {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(rawContent, 'text/html');
-
-          // Next.js & Nuxt SPA state extraction
-          const nextDataScript = doc.getElementById('__NEXT_DATA__');
-          if (nextDataScript) {
-            try {
-              const nextJson = JSON.parse(nextDataScript.textContent);
-              extractFromJsonObject(nextJson);
-            } catch (_) {}
-          }
-
-          function extractFromJsonObject(obj, depth = 0) {
+          const parsed = JSON.parse(nextData.textContent);
+          function walk(obj, depth = 0) {
             if (!obj || depth > 8 || typeof obj !== 'object') return;
-            if (Array.isArray(obj)) {
-              obj.forEach((item) => extractFromJsonObject(item, depth + 1));
-              return;
-            }
+            if (Array.isArray(obj)) { obj.forEach((it) => walk(it, depth + 1)); return; }
             for (const [k, v] of Object.entries(obj)) {
-              const keyLower = k.toLowerCase();
+              const kl = k.toLowerCase();
               if (typeof v === 'string') {
-                if (keyLower === 'headline' || keyLower === 'title' || keyLower === 'post_title') {
-                  registerHeadline(v, 'general');
-                } else if (keyLower === 'subtitle' || keyLower === 'description') {
+                if (kl === 'headline' || kl === 'title' || kl === 'post_title') registerHeadline(v, 'general');
+                else if (kl === 'subtitle' || kl === 'description') {
                   if (v.length > 25 && v.length < 350) registerHeadline(v, 'sub');
                 }
-              } else if (typeof v === 'object') {
-                extractFromJsonObject(v, depth + 1);
-              }
+              } else if (typeof v === 'object') walk(v, depth + 1);
             }
           }
-
-          // JSON-LD Article Schema
-          const ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
-          ldScripts.forEach((script) => {
-            try {
-              const data = JSON.parse(script.textContent);
-              const items = Array.isArray(data) ? data : data['@graph'] ? data['@graph'] : [data];
-
-              items.forEach((item) => {
-                if (item && typeof item === 'object') {
-                  if (item.headline) registerHeadline(item.headline, 'main');
-                  if (item.alternativeHeadline) registerHeadline(item.alternativeHeadline, 'sub');
-                  if (item.description && typeof item.description === 'string' && item.description.length > 20) {
-                    registerHeadline(item.description, 'sub');
-                  }
-                  if (Array.isArray(item.itemListElement)) {
-                    item.itemListElement.forEach((entry) => {
-                      if (entry?.name) registerHeadline(entry.name, 'general');
-                      if (entry?.item?.headline) registerHeadline(entry.item.headline, 'general');
-                      if (entry?.item?.name) registerHeadline(entry.item.name, 'general');
-                    });
-                  }
-                }
-              });
-            } catch (_) {}
-          });
-
-          // OpenGraph & Twitter Meta
-          const ogTitle = doc.querySelector('meta[property="og:title"], meta[name="og:title"], meta[property="og:headline"]')?.getAttribute('content');
-          if (ogTitle) registerHeadline(ogTitle, 'main');
-
-          const ogDesc = doc.querySelector('meta[property="og:description"], meta[name="og:description"]')?.getAttribute('content');
-          if (ogDesc && ogDesc.length > 20) registerHeadline(ogDesc, 'sub');
-
-          const twTitle = doc.querySelector('meta[name="twitter:title"], meta[property="twitter:title"]')?.getAttribute('content');
-          if (twTitle) registerHeadline(twTitle, 'main');
-
-          // Document Title
-          if (doc.title) {
-            const cleanedTitle = doc.title.replace(/\s*[-–|:]\s*(ynet|וואלה|חדשות 12|mako|הארץ|מעריב|ישראל היום|the marker|n12|cnn|bbc|reuters).*$/i, '');
-            registerHeadline(cleanedTitle, 'main');
-          }
-
-          // Clean Noise Nodes
-          const noise = [
-            'nav', 'footer', 'aside', 'header:not(article header):not(main header)',
-            '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
-            '[class*="cookie" i]', '[class*="consent" i]', '[class*="modal" i]',
-            '[class*="sidebar" i]', '[class*="comment" i]', 'style', 'noscript', 'svg'
-          ];
-          const cleanedDoc = doc.cloneNode(true);
-          cleanedDoc.querySelectorAll(noise.join(', ')).forEach((n) => {
-            try { n.remove(); } catch (_) {}
-          });
-
-          // Broadened Selectors
-          const broadenedSelectors = [
-            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-            '[role="heading"]', '[aria-level]',
-            '[class*="title" i]', '[id*="title" i]',
-            '[class*="headline" i]', '[id*="headline" i]',
-            '[class*="card-title" i]', '[id*="card-title" i]',
-            '[class*="post-title" i]', '[id*="post-title" i]',
-            '[class*="entry-title" i]', '[id*="entry-title" i]',
-            '[class*="article-title" i]', '[id*="article-title" i]',
-            '[class*="story-title" i]', '[id*="story-title" i]',
-            '[class*="mainTitle" i]', '[class*="subTitle" i]', '[class*="slotTitle" i]',
-            '[class*="teaser-title" i]', '[class*="feed-title" i]',
-            '[data-qa*="headline" i]', '[data-mrf-title]'
-          ];
-
-          const semanticContainers = cleanedDoc.querySelectorAll('article, [role="article"], main, [role="main"], section[class*="article" i], section[class*="content" i]');
-
-          if (semanticContainers.length > 0) {
-            semanticContainers.forEach((container) => {
-              container.querySelectorAll(broadenedSelectors.join(', ')).forEach((el) => {
-                const tag = el.tagName.toLowerCase();
-                const cat = tag === 'h1' || el.matches('[class*="mainTitle" i]') ? 'main' : tag === 'h2' || el.matches('[class*="subTitle" i]') ? 'sub' : 'general';
-                registerHeadline(el.textContent, cat);
-              });
-
-              container.querySelectorAll('a').forEach((link) => {
-                const linkText = link.textContent.trim();
-                if (linkText.length >= 18 && linkText.length <= 250 && linkText.includes(' ')) {
-                  registerHeadline(linkText, 'general');
-                }
-              });
-            });
-          }
-
-          if (collected.length < 4) {
-            cleanedDoc.querySelectorAll(broadenedSelectors.join(', ')).forEach((el) => {
-              const tag = el.tagName.toLowerCase();
-              const cat = tag === 'h1' ? 'main' : 'general';
-              registerHeadline(el.textContent, cat);
-            });
-
-            cleanedDoc.querySelectorAll('article a, main a').forEach((link) => {
-              const linkText = link.textContent.trim();
-              if (linkText.length >= 18 && linkText.length <= 250 && linkText.includes(' ')) {
-                registerHeadline(linkText, 'general');
-              }
-            });
-          }
+          walk(parsed);
         } catch (_) {}
       }
 
-      // Markdown parsing
-      const lines = rawContent.split(/\r?\n/);
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        if (/^Title:\s*(.+)$/i.test(line)) {
-          const m = line.match(/^Title:\s*(.+)$/i);
-          if (m && m[1]) registerHeadline(m[1], 'main');
-          continue;
-        }
-
-        const hMatch = line.match(/^(#{1,4})\s+(.+)$/);
-        if (hMatch) {
-          const level = hMatch[1].length;
-          const text = hMatch[2];
-          if (level === 1) {
-            registerHeadline(text, 'main');
-            for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-              const nextLine = lines[j].trim();
-              if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('!') && !nextLine.startsWith('[')) {
-                if (nextLine.length >= 25 && nextLine.length <= 400) {
-                  registerHeadline(nextLine, 'sub');
-                }
-                break;
+      // JSON-LD
+      doc.querySelectorAll('script[type="application/ld+json"]').forEach((script) => {
+        try {
+          const data = JSON.parse(script.textContent);
+          const items = Array.isArray(data) ? data : data['@graph'] ? data['@graph'] : [data];
+          items.forEach((item) => {
+            if (item && typeof item === 'object') {
+              if (item.headline) registerHeadline(item.headline, 'main');
+              if (item.alternativeHeadline) registerHeadline(item.alternativeHeadline, 'sub');
+              if (item.description && typeof item.description === 'string' && item.description.length > 20) {
+                registerHeadline(item.description, 'sub');
+              }
+              if (Array.isArray(item.itemListElement)) {
+                item.itemListElement.forEach((entry) => {
+                  if (entry?.name) registerHeadline(entry.name, 'general');
+                  if (entry?.item?.headline) registerHeadline(entry.item.headline, 'general');
+                });
               }
             }
-          } else if (level === 2) {
-            registerHeadline(text, 'sub');
-          } else {
-            registerHeadline(text, 'general');
-          }
-          continue;
-        }
-
-        const linkMatch = line.match(/^(?:[-*•\d.]+\s*)?\[([^\]]{15,300})\]\(https?:\/\/[^)]+\)/);
-        if (linkMatch && linkMatch[1]) {
-          registerHeadline(linkMatch[1], 'general');
-          continue;
-        }
-
-        const boldMatch = line.match(/^\s*\*\*([^*\n]{15,300})\*\*\s*$/);
-        if (boldMatch && boldMatch[1]) {
-          registerHeadline(boldMatch[1], 'general');
-          continue;
-        }
-      }
-
-      if (collected.length === 0) {
-        const candidateLines = lines
-          .map((l) => l.trim())
-          .filter((l) => l.length >= 8 && !isBoilerplateOrNav(l));
-
-        if (candidateLines.length > 0) {
-          registerHeadline(candidateLines[0], 'main');
-          if (candidateLines.length > 1 && candidateLines[1].length >= 15) {
-            registerHeadline(candidateLines[1], 'sub');
-          }
-          for (let i = 2; i < Math.min(candidateLines.length, 12); i++) {
-            registerHeadline(candidateLines[i], 'general');
-          }
-        }
-      }
-
-      if (!mainHeadline && collected.length > 0) {
-        mainHeadline = collected[0];
-      }
-
-      return {
-        mainHeadline,
-        subHeadline,
-        allHeadlines: collected,
-        totalCount: collected.length
-      };
-    }
-
-    // Render headlines for an individual source output box
-    function renderDiagnosedHeadlines(diagnosed, outputEl, countEl, sourceNum) {
-      if (!outputEl) return;
-      if (!diagnosed || diagnosed.allHeadlines.length === 0) {
-        outputEl.value = `No headlines were detected in Source ${sourceNum}.\n\nTip: You can copy and paste the text or HTML of the article directly into the input box above.`;
-        if (countEl) {
-          countEl.textContent = '';
-          countEl.classList.add('hidden');
-        }
-        return;
-      }
-
-      const sections = [];
-
-      // 1. Main Headline
-      if (diagnosed.mainHeadline) {
-        sections.push(`📌 כותרת ראשית (Main Headline):\n${diagnosed.mainHeadline}`);
-      }
-
-      // 2. Sub-Headline / Summary
-      if (diagnosed.subHeadline && diagnosed.subHeadline !== diagnosed.mainHeadline) {
-        sections.push(`📝 כותרת משנה / תקציר:\n${diagnosed.subHeadline}`);
-      }
-
-      // 3. All Diagnosed Headlines List
-      const listLines = diagnosed.allHeadlines.map((h, index) => `${index + 1}. ${h}`);
-      sections.push(`📰 כל הכותרות שאובחנו ממקור ${sourceNum} (${diagnosed.totalCount}):\n${listLines.join('\n\n')}`);
-
-      outputEl.value = sections.join('\n\n========================================\n\n');
-
-      if (countEl) {
-        countEl.textContent = `${diagnosed.totalCount} headlines`;
-        countEl.classList.remove('hidden');
-      }
-    }
-
-    function resetHeadlines() {
-      if (headlinesOutput1) headlinesOutput1.value = '';
-      if (headlinesOutput2) headlinesOutput2.value = '';
-      if (headlinesCount1) {
-        headlinesCount1.textContent = '';
-        headlinesCount1.classList.add('hidden');
-      }
-      if (headlinesCount2) {
-        headlinesCount2.textContent = '';
-        headlinesCount2.classList.add('hidden');
-      }
-    }
-
-    function setLoadingState(isLoading) {
-      if (!checkSourceBtn) return;
-      if (isLoading) {
-        checkSourceBtn.disabled = true;
-        checkSourceBtn.textContent = 'Checking Sources...';
-      } else {
-        checkSourceBtn.disabled = false;
-        checkSourceBtn.textContent = 'Check Sources';
-      }
-    }
-
-    function showStatus(text, type) {
-      if (!statusMessage) return;
-      statusMessage.textContent = text;
-      statusMessage.className = `status-message ${type}`;
-      statusMessage.classList.remove('hidden');
-    }
-
-    function hideStatus() {
-      if (!statusMessage) return;
-      statusMessage.classList.add('hidden');
-      statusMessage.textContent = '';
-    }
-
-    // Attach click listener
-    if (checkSourceBtn) {
-      checkSourceBtn.addEventListener('click', handleCheckSources);
-    }
-
-    // Enter key triggers check
-    [sourceInput1, sourceInput2].forEach((input) => {
-      if (!input) return;
-      input.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-          event.preventDefault();
-          handleCheckSources();
-        }
+          });
+        } catch (_) {}
       });
 
-      input.addEventListener('input', () => {
-        hideStatus();
-        const v1 = sourceInput1 ? sourceInput1.value.trim() : '';
-        const v2 = sourceInput2 ? sourceInput2.value.trim() : '';
-        if (!v1 && !v2) {
-          resetHeadlines();
-          resetLogs();
+      // OpenGraph & Meta
+      const ogTitle = doc.querySelector('meta[property="og:title"], meta[name="og:title"], meta[property="og:headline"]')?.getAttribute('content');
+      if (ogTitle) registerHeadline(ogTitle, 'main');
+      const ogDesc = doc.querySelector('meta[property="og:description"], meta[name="og:description"]')?.getAttribute('content');
+      if (ogDesc && ogDesc.length > 20) registerHeadline(ogDesc, 'sub');
+
+      if (doc.title) {
+        registerHeadline(doc.title.replace(/\s*[-–|:]\s*(ynet|וואלה|חדשות 12|mako|הארץ|מעריב|ישראל היום|the marker|n12|cnn|bbc|reuters).*$/i, ''), 'main');
+      }
+
+      // Noise cleaning
+      const noise = ['nav', 'footer', 'aside', '[role="navigation"]', '[class*="cookie" i]', '[class*="modal" i]', 'style', 'noscript'];
+      const cleanedDoc = doc.cloneNode(true);
+      cleanedDoc.querySelectorAll(noise.join(', ')).forEach((n) => { try { n.remove(); } catch (_) {} });
+
+      const broadened = [
+        'h1', 'h2', 'h3', 'h4', '[role="heading"]',
+        '[class*="title" i]', '[class*="headline" i]', '[class*="card-title" i]',
+        '[class*="post-title" i]', '[class*="mainTitle" i]', '[class*="subTitle" i]',
+        '[data-qa*="headline" i]', '[data-mrf-title]'
+      ];
+
+      const containers = cleanedDoc.querySelectorAll('article, [role="article"], main, [role="main"], section');
+      if (containers.length > 0) {
+        containers.forEach((container) => {
+          container.querySelectorAll(broadened.join(', ')).forEach((el) => {
+            const tag = el.tagName.toLowerCase();
+            const cat = tag === 'h1' || el.matches('[class*="mainTitle" i]') ? 'main' : tag === 'h2' || el.matches('[class*="subTitle" i]') ? 'sub' : 'general';
+            registerHeadline(el.textContent, cat);
+          });
+          container.querySelectorAll('a').forEach((link) => {
+            const t = link.textContent.trim();
+            if (t.length >= 18 && t.length <= 250 && t.includes(' ')) registerHeadline(t, 'general');
+          });
+        });
+      }
+
+      if (collected.length < 4) {
+        cleanedDoc.querySelectorAll(broadened.join(', ')).forEach((el) => {
+          registerHeadline(el.textContent, el.tagName.toLowerCase() === 'h1' ? 'main' : 'general');
+        });
+      }
+    } catch (_) {}
+  }
+
+  // Markdown lines
+  const lines = rawContent.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    if (/^Title:\s*(.+)$/i.test(line)) {
+      const m = line.match(/^Title:\s*(.+)$/i);
+      if (m && m[1]) registerHeadline(m[1], 'main');
+    } else if (/^#{1,4}\s+(.+)$/.test(line)) {
+      const m = line.match(/^(#{1,4})\s+(.+)$/);
+      if (m && m[2]) {
+        registerHeadline(m[2], m[1].length === 1 ? 'main' : 'general');
+        if (m[1].length === 1 && i + 1 < lines.length) {
+          const next = lines[i + 1].trim();
+          if (next && !next.startsWith('#') && next.length >= 25 && next.length <= 350) {
+            registerHeadline(next, 'sub');
+          }
         }
-      });
+      }
+    } else if (/^(?:[-*•\d.]+\s*)?\[([^\]]{15,300})\]\(https?:\/\/[^)]+\)/.test(line)) {
+      const m = line.match(/^(?:[-*•\d.]+\s*)?\[([^\]]{15,300})\]\(https?:\/\/[^)]+\)/);
+      if (m && m[1]) registerHeadline(m[1], 'general');
+    } else if (/^\s*\*\*([^*\n]{15,300})\*\*\s*$/.test(line)) {
+      const m = line.match(/^\s*\*\*([^*\n]{15,300})\*\*\s*$/);
+      if (m && m[1]) registerHeadline(m[1], 'general');
+    }
+  }
+
+  // Plain text fallback
+  if (collected.length === 0) {
+    const candidates = lines.map((l) => l.trim()).filter((l) => l.length >= 8 && !isBoilerplateOrNav(l));
+    if (candidates.length > 0) {
+      registerHeadline(candidates[0], 'main');
+      if (candidates.length > 1 && candidates[1].length >= 15) registerHeadline(candidates[1], 'sub');
+      for (let i = 2; i < Math.min(candidates.length, 12); i++) registerHeadline(candidates[i], 'general');
+    }
+  }
+
+  if (!mainHeadline && collected.length > 0) mainHeadline = collected[0];
+
+  return {
+    mainHeadline,
+    subHeadline,
+    allHeadlines: collected,
+    totalCount: collected.length
+  };
+}
+
+// Render headlines in the output textarea
+function renderHeadlinesOutput(diagnosed, outputEl, countEl, sourceNum) {
+  if (!outputEl) return;
+  if (!diagnosed || diagnosed.allHeadlines.length === 0) {
+    outputEl.value = `No headlines were detected in Source ${sourceNum}.\n\nTip: You can copy and paste the text or HTML of the article directly into the box above.`;
+    if (countEl) {
+      countEl.textContent = '';
+      countEl.classList.add('hidden');
+    }
+    return;
+  }
+
+  const sections = [];
+
+  if (diagnosed.mainHeadline) {
+    sections.push(`📌 כותרת ראשית (Main Headline):\n${diagnosed.mainHeadline}`);
+  }
+
+  if (diagnosed.subHeadline && diagnosed.subHeadline !== diagnosed.mainHeadline) {
+    sections.push(`📝 כותרת משנה / תקציר:\n${diagnosed.subHeadline}`);
+  }
+
+  const list = diagnosed.allHeadlines.map((h, i) => `${i + 1}. ${h}`);
+  sections.push(`📰 כל הכותרות שנמצאו במקור ${sourceNum} (${diagnosed.totalCount}):\n${list.join('\n\n')}`);
+
+  outputEl.value = sections.join('\n\n========================================\n\n');
+
+  if (countEl) {
+    countEl.textContent = `${diagnosed.totalCount} headlines`;
+    countEl.classList.remove('hidden');
+  }
+}
+
+// Attach event listeners when DOM is loaded
+function setupListeners() {
+  const btn = document.getElementById('check-source-btn');
+  if (btn) {
+    btn.addEventListener('click', handleCheckSources);
+  }
+
+  const s1 = document.getElementById('source-input-1');
+  const s2 = document.getElementById('source-input-2');
+
+  [s1, s2].forEach((input) => {
+    if (!input) return;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleCheckSources();
+      }
     });
-  }
+  });
+}
 
-  // Safe bootstrap (DOMContentLoaded or immediate if document already ready)
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApp);
-  } else {
-    initApp();
-  }
-})();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupListeners);
+} else {
+  setupListeners();
+}
