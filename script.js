@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setLoadingState(true);
-    headlinesOutput.value = '🔍 Diagnosing source and extracting all headlines... Please wait.';
+    headlinesOutput.value = '🔍 Analyzing source and diagnosing headlines with multi-tiered extraction... Please wait.';
 
     try {
       let content = '';
@@ -50,11 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       setLoadingState(false);
 
-      // Perform deep headline diagnosis
-      const diagnosed = diagnoseHeadlines(content || rawInput, rawInput);
+      // Perform robust cascading headline diagnosis
+      const diagnosed = extractHeadlinesCascading(content || rawInput, rawInput);
       renderDiagnosedHeadlines(diagnosed);
 
-      // Check for target text "איזנקוט" across input, fetched content, and diagnosed headlines
+      // Check for target text "איזנקוט" across input, content, and all diagnosed headlines
       const combinedSearchSpace = `${rawInput}\n${content}\n${diagnosed.allHeadlines.join('\n')}`;
       const isFound = combinedSearchSpace.includes(TARGET_TEXT);
 
@@ -81,20 +81,22 @@ document.addEventListener('DOMContentLoaded', () => {
     return /^https?:\/\//i.test(text) || (!text.includes(' ') && /^[a-z0-9-]+(\.[a-z]{2,})+/i.test(text));
   }
 
-  // ==========================================
-  // Comprehensive Headline Diagnosis Engine
-  // ==========================================
-  function diagnoseHeadlines(rawContent, originalInput) {
+  // =========================================================================
+  // Robust Multi-Tiered Headline Extraction & Diagnosis Engine
+  // =========================================================================
+  function extractHeadlinesCascading(rawContent, originalInput) {
     if (!rawContent || typeof rawContent !== 'string') {
       return { mainHeadline: '', subHeadline: '', allHeadlines: [], totalCount: 0 };
     }
 
     let mainHeadline = '';
     let subHeadline = '';
-    const collectedHeadlines = [];
-    const seenKeys = new Set();
+    const collected = [];
+    const seenMap = new Map(); // normalizedKey -> originalText
 
-    // Helper: decode HTML entities and clean text thoroughly
+    // -------------------------------------------------------------
+    // Helper: Text Cleansing, Entity Decoding, and Normalization
+    // -------------------------------------------------------------
     function decodeEntities(str) {
       if (!str) return '';
       const txt = document.createElement('textarea');
@@ -105,144 +107,266 @@ document.addEventListener('DOMContentLoaded', () => {
     function cleanString(str) {
       if (!str) return '';
       let cleaned = decodeEntities(str)
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // unwrap markdown links [text](url) -> text
-        .replace(/[*_`~]/g, '')                   // remove markdown formatting
-        .replace(/<[^>]*>/g, '')                  // strip any html tags
-        .replace(/[\u200E\u200F\u202A-\u202E]/g, '') // remove invisible directional marks
-        .replace(/^[\s#*>\-–—:•\d.]+\s*/, '')     // remove leading numbers, bullets, hashes
-        .replace(/\s+/g, ' ')                     // collapse whitespace
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')     // unwrap markdown links [text](url) -> text
+        .replace(/[*_`~#]/g, '')                      // remove markdown formatting & hashes
+        .replace(/<[^>]*>/g, '')                      // strip inline html tags
+        .replace(/[\u200E\u200F\u202A-\u202E]/g, '') // remove bidirectional formatting marks
+        .replace(/^[\s*>\-–—:•\d.]+\s*/, '')         // remove leading bullets, numbers, dashes
+        .replace(/\s+/g, ' ')                         // collapse consecutive whitespace
         .trim();
 
-      // Trim outer quotes if present
+      // Trim outer quotes
       cleaned = cleaned.replace(/^["'״׳«»“”]+|["'״׳«»“”]+$/g, '').trim();
       return cleaned;
     }
 
+    // Filter out common non-article noise, navigation, and boilerplate
     function isBoilerplateOrNav(text) {
-      if (!text || text.length < 4) return true;
+      if (!text || text.length < 5) return true;
       const lower = text.toLowerCase();
 
       const blockedPhrases = [
-        'navigation', 'main menu', 'search', 'skip to content', 'advertisement',
+        'navigation', 'main menu', 'search', 'skip to content', 'advertisement', 'sponsored',
         'share this', 'comments', 'footer', 'header', 'cookie policy', 'privacy policy',
-        'terms of service', 'all rights reserved', 'subscribe', 'sign in', 'log in',
-        'read more', 'continue reading', 'related stories', 'recommended for you',
-        'תפריט', 'ניווט', 'חיפוש', 'שיתוף', 'תגובות', 'פרסומת', 'דלג לתוכן',
+        'terms of service', 'terms of use', 'all rights reserved', 'subscribe', 'sign in',
+        'log in', 'read more', 'continue reading', 'related stories', 'recommended for you',
+        'popular stories', 'trending now', 'follow us', 'latest news', 'contact us',
+        'תפריט', 'ניווט', 'חיפוש', 'שיתוף', 'תגובות', 'פרסומת', 'תוכן מקודם', 'דלג לתוכן',
         'עקבו אחרינו', 'הרשמה לניוזלטר', 'התחברות', 'כל הזכויות שמורות', 'קרא עוד',
-        'כתבות נוספות', 'אולי יעניין אותך', 'מבזקים', 'שירות לקוחות'
+        'כתבות נוספות', 'אולי יעניין אותך', 'מבזקים', 'שירות לקוחות', 'צור קשר',
+        'תנאי שימוש', 'מדיניות פרטיות', 'דף הבית'
       ];
 
-      return blockedPhrases.some(phrase => lower === phrase || lower.startsWith(phrase + ' '));
+      return blockedPhrases.some(phrase => lower === phrase || lower.startsWith(phrase + ' ') || lower.endsWith(' ' + phrase));
     }
 
-    function registerHeadline(text, type = 'general') {
+    function normalizeKey(str) {
+      return str.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+    }
+
+    // Deduplicator that retains the most complete version of a headline
+    function registerHeadline(text, category = 'general') {
       const cleaned = cleanString(text);
       if (!cleaned || isBoilerplateOrNav(cleaned)) return;
 
-      // Deduplication key (case-insensitive, ignoring punctuation)
-      const key = cleaned.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
-      if (!key || key.length < 3) return;
+      // Discard single isolated words unless very descriptive
+      if (!cleaned.includes(' ') && cleaned.length < 12) return;
 
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        collectedHeadlines.push(cleaned);
+      const key = normalizeKey(cleaned);
+      if (!key || key.length < 4) return;
 
-        if (type === 'main' && !mainHeadline) {
+      // Check for existing duplicates or near-duplicates
+      let existingIndex = -1;
+      for (let i = 0; i < collected.length; i++) {
+        const existingKey = normalizeKey(collected[i]);
+        if (existingKey === key) {
+          existingIndex = i;
+          break;
+        }
+        // Substring enhancement: If one headline is a complete substring of another
+        if (key.length > existingKey.length && key.includes(existingKey) && (existingKey.length / key.length) > 0.6) {
+          // Replace shorter with more complete headline
+          collected[i] = cleaned;
+          existingIndex = i;
+          break;
+        } else if (existingKey.length > key.length && existingKey.includes(key) && (key.length / existingKey.length) > 0.6) {
+          // Keep the existing longer one
+          existingIndex = i;
+          break;
+        }
+      }
+
+      if (existingIndex === -1) {
+        collected.push(cleaned);
+        seenMap.set(key, cleaned);
+
+        if (category === 'main' && !mainHeadline) {
           mainHeadline = cleaned;
-        } else if (type === 'sub' && !subHeadline) {
+        } else if (category === 'sub' && !subHeadline) {
           subHeadline = cleaned;
         }
       }
     }
 
-    const isHtmlContent = /<(h[1-6]|title|meta|script|header|article|body|div)/i.test(rawContent);
+    const isHtmlContent = /<(html|head|body|article|main|section|div|p|h[1-6]|script|meta)/i.test(rawContent);
 
-    // ------------------------------------------
-    // 1. HTML Diagnosis: Meta, JSON-LD, Semantics
-    // ------------------------------------------
+    // =========================================================================
+    // Tier 4: Metadata Fallbacks & Structured Schema (Extract early as reference)
+    // =========================================================================
     if (isHtmlContent) {
       try {
         const parser = new DOMParser();
         const doc = parser.parseFromString(rawContent, 'text/html');
 
-        // A. JSON-LD Structured Data (Highest precision for news articles)
-        const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
-        jsonLdScripts.forEach((script) => {
+        // A. JSON-LD Article Schema (NewsArticle, Article, BlogPosting, ListItem)
+        const ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
+        ldScripts.forEach((script) => {
           try {
             const data = JSON.parse(script.textContent);
             const items = Array.isArray(data) ? data : (data['@graph'] ? data['@graph'] : [data]);
 
             items.forEach((item) => {
-              if (item && (typeof item === 'object')) {
+              if (item && typeof item === 'object') {
                 if (item.headline) registerHeadline(item.headline, 'main');
                 if (item.alternativeHeadline) registerHeadline(item.alternativeHeadline, 'sub');
                 if (item.description && typeof item.description === 'string' && item.description.length > 20) {
                   registerHeadline(item.description, 'sub');
+                }
+                // Handle ItemList / Carousel schema (news carousels & feeds)
+                if (Array.isArray(item.itemListElement)) {
+                  item.itemListElement.forEach((entry) => {
+                    if (entry?.name) registerHeadline(entry.name, 'general');
+                    if (entry?.item?.headline) registerHeadline(entry.item.headline, 'general');
+                    if (entry?.item?.name) registerHeadline(entry.item.name, 'general');
+                  });
                 }
               }
             });
           } catch (_) {}
         });
 
-        // B. OpenGraph & Twitter Meta tags
-        const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content');
+        // B. OpenGraph & Twitter Meta Tags
+        const ogTitle = doc.querySelector('meta[property="og:title"], meta[name="og:title"], meta[property="og:headline"]')?.getAttribute('content');
         if (ogTitle) registerHeadline(ogTitle, 'main');
 
-        const ogDesc = doc.querySelector('meta[property="og:description"]')?.getAttribute('content');
-        if (ogDesc && ogDesc.length > 25) registerHeadline(ogDesc, 'sub');
+        const ogDesc = doc.querySelector('meta[property="og:description"], meta[name="og:description"]')?.getAttribute('content');
+        if (ogDesc && ogDesc.length > 20) registerHeadline(ogDesc, 'sub');
 
-        const twitterTitle = doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content');
-        if (twitterTitle) registerHeadline(twitterTitle, 'main');
+        const twTitle = doc.querySelector('meta[name="twitter:title"], meta[property="twitter:title"]')?.getAttribute('content');
+        if (twTitle) registerHeadline(twTitle, 'main');
 
-        const twitterDesc = doc.querySelector('meta[name="twitter:description"]')?.getAttribute('content');
-        if (twitterDesc && twitterDesc.length > 25) registerHeadline(twitterDesc, 'sub');
+        const twDesc = doc.querySelector('meta[name="twitter:description"], meta[property="twitter:description"]')?.getAttribute('content');
+        if (twDesc && twDesc.length > 20) registerHeadline(twDesc, 'sub');
 
-        // C. Document Title
+        // C. Document Title (cleaned of site suffix)
         if (doc.title) {
-          // Clean typical publisher suffix: "Headline - Ynet" -> "Headline"
-          let titleCleaned = doc.title.replace(/\s*[-–|:]\s*(ynet|וואלה|חדשות 12|mako|הארץ|מעריב|ישראל היום|bbc|cnn|reuters|the marker|n12).*$/i, '');
-          registerHeadline(titleCleaned, 'main');
+          const cleanedTitle = doc.title.replace(/\s*[-–|:]\s*(ynet|וואלה|חדשות 12|mako|הארץ|מעריב|ישראל היום|the marker|n12|cnn|bbc|reuters|ap news|guardian).*$/i, '');
+          registerHeadline(cleanedTitle, 'main');
         }
 
-        // D. Primary Headings (h1, h2, h3, h4)
-        doc.querySelectorAll('h1').forEach(el => registerHeadline(el.textContent, 'main'));
-        doc.querySelectorAll('h2').forEach(el => registerHeadline(el.textContent, 'sub'));
-        doc.querySelectorAll('h3, h4').forEach(el => registerHeadline(el.textContent, 'general'));
+        // =======================================================================
+        // Tier 5: DOM Noise Filtering (Remove non-article elements before parsing)
+        // =======================================================================
+        const noiseSelectors = [
+          'nav', 'footer', 'aside',
+          'header:not(article header):not(main header)',
+          '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
+          '[role="dialog"]', '[role="alertdialog"]',
+          '[class*="cookie" i]', '[class*="consent" i]', '[id*="cookie" i]',
+          '[class*="modal" i]', '[class*="popup" i]',
+          '[class*="sidebar" i]', '[id*="sidebar" i]',
+          '[class*="social" i]', '[class*="share" i]',
+          '[class*="comment" i]', '[class*="newsletter" i]',
+          '[class*="advertisement" i]', '[class*="banner-ad" i]',
+          'script', 'style', 'noscript', 'svg'
+        ];
 
-        // E. Semantic Headline Classes (Ynet, Walla, Mako, Haaretz, Maariv, etc.)
-        const newsSelector = [
+        const cleanedDoc = doc.cloneNode(true);
+        cleanedDoc.querySelectorAll(noiseSelectors.join(', ')).forEach((node) => {
+          try { node.remove(); } catch (_) {}
+        });
+
+        // =======================================================================
+        // Tier 1: Target Semantic Containers First (<article>, <main>, <section>)
+        // =======================================================================
+        const semanticContainerSelectors = [
+          'article',
+          '[role="article"]',
+          'main',
+          '[role="main"]',
+          '.main-content',
+          '#main-content',
+          '.content-area',
+          '.entry-content',
+          '.post-content',
+          '.story-body',
+          'section[class*="article" i]',
+          'section[class*="story" i]',
+          'section[class*="post" i]',
+          'section[class*="content" i]',
+          'section'
+        ];
+
+        const foundContainers = cleanedDoc.querySelectorAll(semanticContainerSelectors.join(', '));
+
+        // Common CMS Pattern Selectors (Tier 3)
+        const cmsHeadlineSelectors = [
+          'h1', 'h2', 'h3', 'h4', 'h5', 'h6', '[role="heading"]',
+          '[class*="headline" i]',
+          '[class*="post-title" i]',
+          '[class*="entry-title" i]',
+          '[class*="card-title" i]',
+          '[class*="article-title" i]',
+          '[class*="article-header" i]',
+          '[class*="story-headline" i]',
+          '[class*="news-title" i]',
           '[class*="mainTitle" i]',
           '[class*="subTitle" i]',
           '[class*="slotTitle" i]',
-          '[class*="headline" i]',
-          '[class*="article-title" i]',
-          '[class*="entry-title" i]',
-          '[data-mrf-title]',
+          '[class*="teaser-title" i]',
+          '[class*="feed-title" i]',
+          '[id*="headline" i]',
+          '[id*="post-title" i]',
+          '[id*="article-title" i]',
           '[data-qa="headline"]',
-          '[data-qa="sub-headline"]'
-        ].join(', ');
+          '[data-qa="sub-headline"]',
+          '[data-mrf-title]',
+          '[itemprop="headline"]',
+          '[itemprop="name"]',
+          '[itemprop="alternativeHeadline"]'
+        ];
 
-        doc.querySelectorAll(newsSelector).forEach(el => {
-          registerHeadline(el.textContent, 'general');
-        });
+        // Tier 2: Broaden Element & Wrapper Coverage inside containers
+        const wrapperSelectors = [
+          ...cmsHeadlineSelectors,
+          'p[class*="sub" i]', 'div[class*="sub" i]',
+          'p[class*="lead" i]', 'div[class*="lead" i]',
+          'p[class*="kicker" i]', 'span[class*="kicker" i]',
+          'a[class*="title" i]', 'a[class*="headline" i]', 'a[class*="link" i]'
+        ];
 
-        // F. Article links (Headlines inside news feed links)
-        doc.querySelectorAll('article a, [class*="slot" i] a, [class*="news" i] a, [class*="item" i] a').forEach(a => {
-          const text = a.textContent.trim();
-          // Headline links typically have at least 4 words or 18+ characters
-          if (text.length >= 18 && text.length <= 250 && text.includes(' ')) {
-            registerHeadline(text, 'general');
-          }
-        });
+        if (foundContainers.length > 0) {
+          foundContainers.forEach((container) => {
+            // Find headings and CMS headline wrappers inside this semantic container
+            const elements = container.querySelectorAll(wrapperSelectors.join(', '));
+            elements.forEach((el) => {
+              const tag = el.tagName.toLowerCase();
+              const category = (tag === 'h1' || el.matches('[class*="mainTitle" i]'))
+                ? 'main'
+                : (tag === 'h2' || el.matches('[class*="subTitle" i], p[class*="lead" i]'))
+                  ? 'sub'
+                  : 'general';
+
+              registerHeadline(el.textContent, category);
+            });
+
+            // Also check for direct article link headlines inside article containers
+            container.querySelectorAll('a').forEach((link) => {
+              const linkText = link.textContent.trim();
+              if (linkText.length >= 18 && linkText.length <= 250 && linkText.includes(' ')) {
+                registerHeadline(linkText, 'general');
+              }
+            });
+          });
+        }
+
+        // =======================================================================
+        // Fallback: Scan Cleaned Body if Containers Were Insufficient
+        // =======================================================================
+        if (collected.length < 3) {
+          cleanedDoc.querySelectorAll(wrapperSelectors.join(', ')).forEach((el) => {
+            const tag = el.tagName.toLowerCase();
+            const category = (tag === 'h1') ? 'main' : (tag === 'h2') ? 'sub' : 'general';
+            registerHeadline(el.textContent, category);
+          });
+        }
       } catch (_) {}
     }
 
-    // ------------------------------------------
-    // 2. Markdown / Jina Reader Diagnosis
-    // ------------------------------------------
+    // =========================================================================
+    // Markdown & Jina Reader Handling (For JS-heavy/proxy feeds)
+    // =========================================================================
     const lines = rawContent.split(/\r?\n/);
-    let foundFirstHeading = false;
-
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -254,15 +378,14 @@ document.addEventListener('DOMContentLoaded', () => {
         continue;
       }
 
-      // Markdown Headings (# H1, ## H2, ### H3, #### H4)
+      // Markdown Headings: # H1, ## H2, ### H3, #### H4
       const hMatch = line.match(/^(#{1,4})\s+(.+)$/);
       if (hMatch) {
         const level = hMatch[1].length;
         const text = hMatch[2];
         if (level === 1) {
           registerHeadline(text, 'main');
-          foundFirstHeading = true;
-          // Check if immediate next non-empty line is a subtitle/lead paragraph
+          // Check subsequent line for lead paragraph / sub-headline
           for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
             const nextLine = lines[j].trim();
             if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('!') && !nextLine.startsWith('[')) {
@@ -280,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
         continue;
       }
 
-      // Markdown Links with headline text: [Headline text](url) or - [Headline text](url)
+      // Feed / Story links: [Headline Text](url) or - [Headline Text](url) or * [Headline Text](url)
       const linkMatch = line.match(/^(?:[-*•\d.]+\s*)?\[([^\]]{15,300})\]\(https?:\/\/[^)]+\)/);
       if (linkMatch && linkMatch[1]) {
         registerHeadline(linkMatch[1], 'general');
@@ -295,32 +418,35 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // ------------------------------------------
-    // 3. Fallback for Plain Text Inputs
-    // ------------------------------------------
-    if (collectedHeadlines.length === 0) {
-      const nonEmptyLines = lines.map(l => l.trim()).filter(l => l.length > 5);
-      if (nonEmptyLines.length > 0) {
-        registerHeadline(nonEmptyLines[0], 'main');
-        if (nonEmptyLines.length > 1 && nonEmptyLines[1].length > 10) {
-          registerHeadline(nonEmptyLines[1], 'sub');
+    // =========================================================================
+    // Plain Text Fallback (When raw text is pasted directly)
+    // =========================================================================
+    if (collected.length === 0) {
+      const candidateLines = lines
+        .map(l => l.trim())
+        .filter(l => l.length >= 8 && !isBoilerplateOrNav(l));
+
+      if (candidateLines.length > 0) {
+        registerHeadline(candidateLines[0], 'main');
+        if (candidateLines.length > 1 && candidateLines[1].length >= 15) {
+          registerHeadline(candidateLines[1], 'sub');
         }
-        for (let i = 2; i < Math.min(nonEmptyLines.length, 12); i++) {
-          registerHeadline(nonEmptyLines[i], 'general');
+        for (let i = 2; i < Math.min(candidateLines.length, 12); i++) {
+          registerHeadline(candidateLines[i], 'general');
         }
       }
     }
 
-    // Ensure mainHeadline exists if any headlines were detected
-    if (!mainHeadline && collectedHeadlines.length > 0) {
-      mainHeadline = collectedHeadlines[0];
+    // Default main headline if missing
+    if (!mainHeadline && collected.length > 0) {
+      mainHeadline = collected[0];
     }
 
     return {
       mainHeadline,
       subHeadline,
-      allHeadlines: collectedHeadlines,
-      totalCount: collectedHeadlines.length
+      allHeadlines: collected,
+      totalCount: collected.length
     };
   }
 
