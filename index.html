@@ -12,15 +12,8 @@
       <h1 class="title">Sources Headline Diagnosis</h1>
       <p class="subtitle">Extract and compare headlines across multiple sources</p>
 
-      <!-- Initial state: Only "Enter source" button -->
-      <div id="initial-view">
-        <button id="enter-source-btn" class="btn primary-btn" type="button">
-          Enter source
-        </button>
-      </div>
-
-      <!-- Second state: 2 source inputs, "Check Sources" button, and 2 HeadLines outputs -->
-      <div id="input-view" class="hidden">
+      <!-- Main Input & Verification Form -->
+      <div id="input-view">
         <!-- Dual Source Input Grid -->
         <div class="sources-dual-grid">
           <div class="source-input-group">
@@ -28,11 +21,10 @@
             <textarea
               id="source-input-1"
               class="text-input"
-              rows="2"
+              rows="3"
               placeholder="Enter first source URL (e.g. https://...) or paste text..."
               autocomplete="off"
             ></textarea>
-            <!-- Badge preserved for target text verification -->
             <div id="input-badge-1" class="result-badge hidden" aria-live="polite"></div>
           </div>
 
@@ -41,11 +33,10 @@
             <textarea
               id="source-input-2"
               class="text-input"
-              rows="2"
+              rows="3"
               placeholder="Enter second source URL (e.g. https://...) or paste text..."
               autocomplete="off"
             ></textarea>
-            <!-- Badge preserved for target text verification -->
             <div id="input-badge-2" class="result-badge hidden" aria-live="polite"></div>
           </div>
         </div>
@@ -54,7 +45,6 @@
           <button id="check-source-btn" class="btn primary-btn" type="button">
             Check Sources
           </button>
-          <!-- Badge preserved next to button -->
           <div id="button-badge" class="result-badge hidden" aria-live="polite"></div>
         </div>
 
@@ -71,7 +61,7 @@
             <textarea
               id="headlines-output-1"
               class="text-input headlines-textarea"
-              rows="8"
+              rows="9"
               readonly
               placeholder="Headlines from Source 1 will be presented here..."
             ></textarea>
@@ -86,7 +76,7 @@
             <textarea
               id="headlines-output-2"
               class="text-input headlines-textarea"
-              rows="8"
+              rows="9"
               readonly
               placeholder="Headlines from Source 2 will be presented here..."
             ></textarea>
