@@ -36,32 +36,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setLoadingState(true);
-    headlinesOutput.value = 'Fetching source and extracting headlines...';
+    headlinesOutput.value = '🔍 Diagnosing source and extracting all headlines... Please wait.';
 
     try {
-      let isFound = false;
       let content = '';
 
-      // 1. Direct text check: Check if entered string contains the target word
-      if (rawInput.includes(TARGET_TEXT)) {
-        isFound = true;
-      }
-
-      // 2. Fetch page content if input is a URL
+      // Fetch page content if input is a URL
       if (looksLikeUrl(rawInput)) {
         content = await fetchPageContent(rawInput);
-        if (content && content.includes(TARGET_TEXT)) {
-          isFound = true;
-        }
       } else {
         content = rawInput;
       }
 
       setLoadingState(false);
 
-      // 3. Extract and display all headlines
-      const headlines = extractHeadlines(content || rawInput);
-      displayHeadlines(headlines);
+      // Perform deep headline diagnosis
+      const diagnosed = diagnoseHeadlines(content || rawInput, rawInput);
+      renderDiagnosedHeadlines(diagnosed);
+
+      // Check for target text "איזנקוט" across input, fetched content, and diagnosed headlines
+      const combinedSearchSpace = `${rawInput}\n${content}\n${diagnosed.allHeadlines.join('\n')}`;
+      const isFound = combinedSearchSpace.includes(TARGET_TEXT);
 
       if (isFound) {
         showSuccessBadge();
@@ -73,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       setLoadingState(false);
       showErrorBadges();
-      headlinesOutput.value = `Could not extract headlines: ${err.message || 'Verification failed.'}`;
+      headlinesOutput.value = `❌ Could not diagnose headlines: ${err.message || 'Verification failed.'}\n\nTip: You can copy and paste the article text or headlines directly into the source box above.`;
       showStatus(
         `${err.message || 'Verification failed.'} Tip: You can also copy and paste the article text directly into the box.`,
         'error'
@@ -86,102 +81,279 @@ document.addEventListener('DOMContentLoaded', () => {
     return /^https?:\/\//i.test(text) || (!text.includes(' ') && /^[a-z0-9-]+(\.[a-z]{2,})+/i.test(text));
   }
 
-  // Extract headlines from HTML, Markdown, or plain text
-  function extractHeadlines(rawContent) {
-    if (!rawContent || typeof rawContent !== 'string') return [];
+  // ==========================================
+  // Comprehensive Headline Diagnosis Engine
+  // ==========================================
+  function diagnoseHeadlines(rawContent, originalInput) {
+    if (!rawContent || typeof rawContent !== 'string') {
+      return { mainHeadline: '', subHeadline: '', allHeadlines: [], totalCount: 0 };
+    }
 
-    const headlines = [];
-    const seen = new Set();
+    let mainHeadline = '';
+    let subHeadline = '';
+    const collectedHeadlines = [];
+    const seenKeys = new Set();
 
-    function addHeadline(text) {
-      if (!text) return;
-      let cleaned = text
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // remove markdown links [title](url)
+    // Helper: decode HTML entities and clean text thoroughly
+    function decodeEntities(str) {
+      if (!str) return '';
+      const txt = document.createElement('textarea');
+      txt.innerHTML = str;
+      return txt.value;
+    }
+
+    function cleanString(str) {
+      if (!str) return '';
+      let cleaned = decodeEntities(str)
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // unwrap markdown links [text](url) -> text
         .replace(/[*_`~]/g, '')                   // remove markdown formatting
-        .replace(/<[^>]*>/g, '')                  // strip inline html tags
+        .replace(/<[^>]*>/g, '')                  // strip any html tags
+        .replace(/[\u200E\u200F\u202A-\u202E]/g, '') // remove invisible directional marks
         .replace(/^[\s#*>\-–—:•\d.]+\s*/, '')     // remove leading numbers, bullets, hashes
+        .replace(/\s+/g, ' ')                     // collapse whitespace
         .trim();
 
-      if (cleaned.length < 3 || cleaned.length > 300) return;
+      // Trim outer quotes if present
+      cleaned = cleaned.replace(/^["'״׳«»“”]+|["'״׳«»“”]+$/g, '').trim();
+      return cleaned;
+    }
 
-      // Filter out typical non-headline navigational text
-      const lower = cleaned.toLowerCase();
-      const commonUi = [
-        'navigation', 'menu', 'search', 'skip to content', 'advertisement', 'share',
-        'comments', 'footer', 'header', 'cookie policy', 'privacy policy', 'terms of service',
-        'תפריט', 'ניווט', 'חיפוש', 'שיתוף', 'תגובות', 'פרסומת', 'דלג לתוכן', 'עקבו אחרינו'
+    function isBoilerplateOrNav(text) {
+      if (!text || text.length < 4) return true;
+      const lower = text.toLowerCase();
+
+      const blockedPhrases = [
+        'navigation', 'main menu', 'search', 'skip to content', 'advertisement',
+        'share this', 'comments', 'footer', 'header', 'cookie policy', 'privacy policy',
+        'terms of service', 'all rights reserved', 'subscribe', 'sign in', 'log in',
+        'read more', 'continue reading', 'related stories', 'recommended for you',
+        'תפריט', 'ניווט', 'חיפוש', 'שיתוף', 'תגובות', 'פרסומת', 'דלג לתוכן',
+        'עקבו אחרינו', 'הרשמה לניוזלטר', 'התחברות', 'כל הזכויות שמורות', 'קרא עוד',
+        'כתבות נוספות', 'אולי יעניין אותך', 'מבזקים', 'שירות לקוחות'
       ];
-      if (commonUi.includes(lower)) return;
 
-      const dedupeKey = lower.replace(/\s+/g, ' ');
-      if (!seen.has(dedupeKey)) {
-        seen.add(dedupeKey);
-        headlines.push(cleaned);
+      return blockedPhrases.some(phrase => lower === phrase || lower.startsWith(phrase + ' '));
+    }
+
+    function registerHeadline(text, type = 'general') {
+      const cleaned = cleanString(text);
+      if (!cleaned || isBoilerplateOrNav(cleaned)) return;
+
+      // Deduplication key (case-insensitive, ignoring punctuation)
+      const key = cleaned.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+      if (!key || key.length < 3) return;
+
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        collectedHeadlines.push(cleaned);
+
+        if (type === 'main' && !mainHeadline) {
+          mainHeadline = cleaned;
+        } else if (type === 'sub' && !subHeadline) {
+          subHeadline = cleaned;
+        }
       }
     }
 
-    // 1. If content contains HTML tags, parse with DOMParser
-    if (/<(h[1-6]|title|header|article)/i.test(rawContent)) {
+    const isHtmlContent = /<(h[1-6]|title|meta|script|header|article|body|div)/i.test(rawContent);
+
+    // ------------------------------------------
+    // 1. HTML Diagnosis: Meta, JSON-LD, Semantics
+    // ------------------------------------------
+    if (isHtmlContent) {
       try {
         const parser = new DOMParser();
         const doc = parser.parseFromString(rawContent, 'text/html');
 
+        // A. JSON-LD Structured Data (Highest precision for news articles)
+        const jsonLdScripts = doc.querySelectorAll('script[type="application/ld+json"]');
+        jsonLdScripts.forEach((script) => {
+          try {
+            const data = JSON.parse(script.textContent);
+            const items = Array.isArray(data) ? data : (data['@graph'] ? data['@graph'] : [data]);
+
+            items.forEach((item) => {
+              if (item && (typeof item === 'object')) {
+                if (item.headline) registerHeadline(item.headline, 'main');
+                if (item.alternativeHeadline) registerHeadline(item.alternativeHeadline, 'sub');
+                if (item.description && typeof item.description === 'string' && item.description.length > 20) {
+                  registerHeadline(item.description, 'sub');
+                }
+              }
+            });
+          } catch (_) {}
+        });
+
+        // B. OpenGraph & Twitter Meta tags
+        const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content');
+        if (ogTitle) registerHeadline(ogTitle, 'main');
+
+        const ogDesc = doc.querySelector('meta[property="og:description"]')?.getAttribute('content');
+        if (ogDesc && ogDesc.length > 25) registerHeadline(ogDesc, 'sub');
+
+        const twitterTitle = doc.querySelector('meta[name="twitter:title"]')?.getAttribute('content');
+        if (twitterTitle) registerHeadline(twitterTitle, 'main');
+
+        const twitterDesc = doc.querySelector('meta[name="twitter:description"]')?.getAttribute('content');
+        if (twitterDesc && twitterDesc.length > 25) registerHeadline(twitterDesc, 'sub');
+
+        // C. Document Title
         if (doc.title) {
-          addHeadline(doc.title);
+          // Clean typical publisher suffix: "Headline - Ynet" -> "Headline"
+          let titleCleaned = doc.title.replace(/\s*[-–|:]\s*(ynet|וואלה|חדשות 12|mako|הארץ|מעריב|ישראל היום|bbc|cnn|reuters|the marker|n12).*$/i, '');
+          registerHeadline(titleCleaned, 'main');
         }
 
-        const headingElements = doc.querySelectorAll('h1, h2, h3, h4, .headline, [class*="headline"], [class*="Headline"], [class*="title"]');
-        headingElements.forEach((el) => {
-          addHeadline(el.textContent);
+        // D. Primary Headings (h1, h2, h3, h4)
+        doc.querySelectorAll('h1').forEach(el => registerHeadline(el.textContent, 'main'));
+        doc.querySelectorAll('h2').forEach(el => registerHeadline(el.textContent, 'sub'));
+        doc.querySelectorAll('h3, h4').forEach(el => registerHeadline(el.textContent, 'general'));
+
+        // E. Semantic Headline Classes (Ynet, Walla, Mako, Haaretz, Maariv, etc.)
+        const newsSelector = [
+          '[class*="mainTitle" i]',
+          '[class*="subTitle" i]',
+          '[class*="slotTitle" i]',
+          '[class*="headline" i]',
+          '[class*="article-title" i]',
+          '[class*="entry-title" i]',
+          '[data-mrf-title]',
+          '[data-qa="headline"]',
+          '[data-qa="sub-headline"]'
+        ].join(', ');
+
+        doc.querySelectorAll(newsSelector).forEach(el => {
+          registerHeadline(el.textContent, 'general');
         });
-      } catch (_) {
-        // Fallback to text parsing
-      }
+
+        // F. Article links (Headlines inside news feed links)
+        doc.querySelectorAll('article a, [class*="slot" i] a, [class*="news" i] a, [class*="item" i] a').forEach(a => {
+          const text = a.textContent.trim();
+          // Headline links typically have at least 4 words or 18+ characters
+          if (text.length >= 18 && text.length <= 250 && text.includes(' ')) {
+            registerHeadline(text, 'general');
+          }
+        });
+      } catch (_) {}
     }
 
-    // 2. Extract Markdown / Jina Reader titles
+    // ------------------------------------------
+    // 2. Markdown / Jina Reader Diagnosis
+    // ------------------------------------------
     const lines = rawContent.split(/\r?\n/);
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+    let foundFirstHeading = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
 
       // Jina "Title: ..."
-      if (/^Title:\s*(.+)$/i.test(trimmed)) {
-        const match = trimmed.match(/^Title:\s*(.+)$/i);
-        if (match && match[1]) addHeadline(match[1]);
+      if (/^Title:\s*(.+)$/i.test(line)) {
+        const m = line.match(/^Title:\s*(.+)$/i);
+        if (m && m[1]) registerHeadline(m[1], 'main');
+        continue;
       }
-      // Markdown headings (#, ##, ###, ####)
-      else if (/^#{1,4}\s+(.+)$/.test(trimmed)) {
-        const match = trimmed.match(/^#{1,4}\s+(.+)$/);
-        if (match && match[1]) addHeadline(match[1]);
+
+      // Markdown Headings (# H1, ## H2, ### H3, #### H4)
+      const hMatch = line.match(/^(#{1,4})\s+(.+)$/);
+      if (hMatch) {
+        const level = hMatch[1].length;
+        const text = hMatch[2];
+        if (level === 1) {
+          registerHeadline(text, 'main');
+          foundFirstHeading = true;
+          // Check if immediate next non-empty line is a subtitle/lead paragraph
+          for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+            const nextLine = lines[j].trim();
+            if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('!') && !nextLine.startsWith('[')) {
+              if (nextLine.length >= 25 && nextLine.length <= 400) {
+                registerHeadline(nextLine, 'sub');
+              }
+              break;
+            }
+          }
+        } else if (level === 2) {
+          registerHeadline(text, 'sub');
+        } else {
+          registerHeadline(text, 'general');
+        }
+        continue;
+      }
+
+      // Markdown Links with headline text: [Headline text](url) or - [Headline text](url)
+      const linkMatch = line.match(/^(?:[-*•\d.]+\s*)?\[([^\]]{15,300})\]\(https?:\/\/[^)]+\)/);
+      if (linkMatch && linkMatch[1]) {
+        registerHeadline(linkMatch[1], 'general');
+        continue;
+      }
+
+      // Bold standalone headline lines: **Headline Text**
+      const boldMatch = line.match(/^\s*\*\*([^*\n]{15,300})\*\*\s*$/);
+      if (boldMatch && boldMatch[1]) {
+        registerHeadline(boldMatch[1], 'general');
+        continue;
       }
     }
 
-    // 3. Fallback: if no headings were found and user pasted raw text lines
-    if (headlines.length === 0) {
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.length > 5 && trimmed.length < 200) {
-          addHeadline(trimmed);
-          if (headlines.length >= 6) break;
+    // ------------------------------------------
+    // 3. Fallback for Plain Text Inputs
+    // ------------------------------------------
+    if (collectedHeadlines.length === 0) {
+      const nonEmptyLines = lines.map(l => l.trim()).filter(l => l.length > 5);
+      if (nonEmptyLines.length > 0) {
+        registerHeadline(nonEmptyLines[0], 'main');
+        if (nonEmptyLines.length > 1 && nonEmptyLines[1].length > 10) {
+          registerHeadline(nonEmptyLines[1], 'sub');
+        }
+        for (let i = 2; i < Math.min(nonEmptyLines.length, 12); i++) {
+          registerHeadline(nonEmptyLines[i], 'general');
         }
       }
     }
 
-    return headlines;
+    // Ensure mainHeadline exists if any headlines were detected
+    if (!mainHeadline && collectedHeadlines.length > 0) {
+      mainHeadline = collectedHeadlines[0];
+    }
+
+    return {
+      mainHeadline,
+      subHeadline,
+      allHeadlines: collectedHeadlines,
+      totalCount: collectedHeadlines.length
+    };
   }
 
-  function displayHeadlines(headlines) {
-    if (headlines && headlines.length > 0) {
-      headlinesOutput.value = headlines
-        .map((item, idx) => `${idx + 1}. ${item}`)
-        .join('\n\n');
-      headlinesCount.textContent = `${headlines.length} headlines`;
-      headlinesCount.classList.remove('hidden');
-    } else {
-      headlinesOutput.value = 'No headlines were detected in this source.';
+  // Render the diagnosed headlines fully and structured in the textarea
+  function renderDiagnosedHeadlines(diagnosed) {
+    if (!diagnosed || diagnosed.allHeadlines.length === 0) {
+      headlinesOutput.value = 'No headlines were detected in this source.\n\nTip: You can copy and paste the text of the article directly into the input box above.';
+      headlinesCount.textContent = '';
       headlinesCount.classList.add('hidden');
+      return;
     }
+
+    const sections = [];
+
+    // 1. Main Headline
+    if (diagnosed.mainHeadline) {
+      sections.push(`📌 כותרת ראשית (Main Headline):\n${diagnosed.mainHeadline}`);
+    }
+
+    // 2. Sub-Headline / Summary (if distinct from main headline)
+    if (diagnosed.subHeadline && diagnosed.subHeadline !== diagnosed.mainHeadline) {
+      sections.push(`📝 כותרת משנה / תקציר (Sub-Headline):\n${diagnosed.subHeadline}`);
+    }
+
+    // 3. All Diagnosed Headlines List
+    const listLines = diagnosed.allHeadlines.map((h, index) => `${index + 1}. ${h}`);
+    sections.push(`📰 כל הכותרות שאובחנו מהמקור (${diagnosed.totalCount}):\n${listLines.join('\n\n')}`);
+
+    headlinesOutput.value = sections.join('\n\n========================================\n\n');
+
+    // Update the counter pill
+    headlinesCount.textContent = `${diagnosed.totalCount} headlines diagnosed`;
+    headlinesCount.classList.remove('hidden');
   }
 
   function resetHeadlines() {
