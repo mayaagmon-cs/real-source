@@ -7,6 +7,9 @@ function verifyTargetText(text) {
   return text.includes(TARGET_TEXT);
 }
 
+// Stores the last diagnosed main headlines from Source 1 and Source 2
+const lastExtractedHeadlines = { 1: '', 2: '' };
+
 // Global logger entries
 const scrapingLogEntries = [];
 
@@ -93,6 +96,9 @@ function clearAllSources() {
   if (o2) o2.value = '';
   if (c1) { c1.textContent = ''; c1.classList.add('hidden'); }
   if (c2) { c2.textContent = ''; c2.classList.add('hidden'); }
+  lastExtractedHeadlines[1] = '';
+  lastExtractedHeadlines[2] = '';
+  clearComparisonFields();
   hideStatusMessage();
   resetInspectionLogs();
 }
@@ -211,6 +217,14 @@ async function processSingleSource(rawInput, sourceNum, outputEl, countEl) {
     addInspectionLog(`[Source ${sourceNum}] Running headline extraction engine...`, 'engine');
     const diagnosed = extractHeadlinesFromContent(content || rawInput, sourceNum);
     renderHeadlinesOutput(diagnosed, outputEl, countEl, sourceNum);
+
+    if (diagnosed.mainHeadline) {
+      lastExtractedHeadlines[sourceNum] = diagnosed.mainHeadline;
+      const targetInput = document.getElementById(sourceNum === 1 ? 'first-headline-input' : 'second-headline-input');
+      if (targetInput && !targetInput.value.trim()) {
+        targetInput.value = diagnosed.mainHeadline;
+      }
+    }
 
     if (fetchReport.isBotShielded) {
       setInspectionBotBadge('Shield Detected', 'error');
@@ -621,11 +635,263 @@ function renderHeadlinesOutput(diagnosed, outputEl, countEl, sourceNum) {
   }
 }
 
+// =========================================================================
+// Headline Comparison Engine
+// =========================================================================
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function compareTwoHeadlines(str1, str2) {
+  if (!str1 || !str2) {
+    return {
+      score: 0,
+      category: 'low',
+      verdict: 'Please enter both headlines to compare.',
+      sharedWords: [],
+      unique1: [],
+      unique2: []
+    };
+  }
+
+  const s1 = str1.trim();
+  const s2 = str2.trim();
+
+  // Stop words in Hebrew & English
+  const stopWords = new Set([
+    'של', 'על', 'את', 'עם', 'זה', 'זו', 'כי', 'אם', 'גם', 'רק', 'כל', 'לא', 'כן',
+    'הוא', 'היא', 'הם', 'הן', 'או', 'בין', 'אל', 'עד', 'כדי', 'כפי', 'אך', 'אבל',
+    'מאת', 'עלפי', 'לפי', 'בשל', 'עקב', 'תוך', 'עוד', 'כבר', 'אשר', 'כמו', 'היה', 'היתה', 'היו',
+    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'in', 'on', 'at', 'of', 'to',
+    'for', 'and', 'or', 'by', 'with', 'from', 'that', 'this', 'as', 'it', 'be', 'has', 'have'
+  ]);
+
+  function getTokens(text) {
+    return text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+      .split(/\s+/)
+      .map(w => w.trim())
+      .filter(w => w.length >= 2 && !stopWords.has(w));
+  }
+
+  function getBigrams(text) {
+    const clean = text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+    const grams = [];
+    for (let i = 0; i < clean.length - 1; i++) {
+      grams.push(clean.substring(i, i + 2));
+    }
+    return grams;
+  }
+
+  const tokens1 = getTokens(s1);
+  const tokens2 = getTokens(s2);
+
+  const set1 = new Set(tokens1);
+  const set2 = new Set(tokens2);
+
+  // Exact word overlap
+  const sharedWords = [];
+  set1.forEach(word => {
+    if (set2.has(word)) {
+      sharedWords.push(word);
+    }
+  });
+
+  // Fuzzy word matching for Hebrew prefixes (e.g. "המגעים" ~ "מגעים", "בביירות" ~ "ביירות")
+  set1.forEach(w1 => {
+    if (!set2.has(w1)) {
+      set2.forEach(w2 => {
+        if (!set1.has(w2) && !sharedWords.includes(w1) && !sharedWords.includes(w2)) {
+          if (w1.length >= 4 && w2.length >= 4) {
+            if (w1.includes(w2) || w2.includes(w1)) {
+              sharedWords.push(`${w1} ≈ ${w2}`);
+            }
+          }
+        }
+      });
+    }
+  });
+
+  const unique1 = tokens1.filter(w => !set2.has(w) && !sharedWords.some(sw => sw.includes(w)));
+  const unique2 = tokens2.filter(w => !set1.has(w) && !sharedWords.some(sw => sw.includes(w)));
+
+  // Word overlap ratio
+  const totalTokens = (tokens1.length + tokens2.length) || 1;
+  const wordOverlapRatio = (sharedWords.length * 2) / totalTokens;
+
+  // Character bigrams Sørensen-Dice coefficient
+  const bg1 = getBigrams(s1);
+  const bg2 = getBigrams(s2);
+  let bgMatch = 0;
+  const bg2Copy = [...bg2];
+  bg1.forEach(gram => {
+    const idx = bg2Copy.indexOf(gram);
+    if (idx !== -1) {
+      bgMatch++;
+      bg2Copy.splice(idx, 1);
+    }
+  });
+  const totalBg = (bg1.length + bg2.length) || 1;
+  const bigramRatio = (bgMatch * 2) / totalBg;
+
+  // Composite score (0 - 100)
+  let score = Math.round((wordOverlapRatio * 0.65 + bigramRatio * 0.35) * 100);
+  if (s1.toLowerCase() === s2.toLowerCase()) {
+    score = 100;
+  }
+  score = Math.min(100, Math.max(0, score));
+
+  let category = 'low';
+  let verdict = 'Different Topics — Minimal or no topical correlation between headlines';
+
+  if (score >= 70) {
+    category = 'high';
+    verdict = 'High Similarity — Both headlines cover the same event or topic with strong keyword overlap';
+  } else if (score >= 40) {
+    category = 'medium';
+    verdict = 'Moderate Similarity — Related topics with overlapping themes or differing emphasis';
+  } else if (score >= 18) {
+    category = 'low';
+    verdict = 'Low Similarity — Slight thematic overlap or incidental shared phrasing';
+  }
+
+  return {
+    score,
+    category,
+    verdict,
+    sharedWords: [...new Set(sharedWords)],
+    unique1: [...new Set(unique1)],
+    unique2: [...new Set(unique2)]
+  };
+}
+
+function handleCompareHeadlines() {
+  const h1El = document.getElementById('first-headline-input');
+  const h2El = document.getElementById('second-headline-input');
+  const resEl = document.getElementById('compare-result');
+
+  const text1 = h1El ? h1El.value.trim() : '';
+  const text2 = h2El ? h2El.value.trim() : '';
+
+  if (!resEl) return;
+
+  if (!text1 || !text2) {
+    resEl.className = 'compare-result';
+    resEl.innerHTML = `
+      <div class="status-message error" style="margin: 0;">
+        ⚠️ Please provide both <strong>First Headline</strong> and <strong>Second Headline</strong> to perform a comparison.
+      </div>
+    `;
+    resEl.classList.remove('hidden');
+    if (!text1 && h1El) h1El.focus();
+    else if (!text2 && h2El) h2El.focus();
+    return;
+  }
+
+  const comparison = compareTwoHeadlines(text1, text2);
+  const fillColors = {
+    high: '#10b981',
+    medium: '#f59e0b',
+    low: '#ef4444'
+  };
+  const fillColor = fillColors[comparison.category] || '#3b82f6';
+
+  const sharedHtml = comparison.sharedWords.length > 0
+    ? comparison.sharedWords.map(w => `<span class="compare-chip shared">✨ ${escapeHtml(w)}</span>`).join('')
+    : '<span class="compare-chip-empty">No direct keyword overlap detected</span>';
+
+  const u1Html = comparison.unique1.length > 0
+    ? comparison.unique1.map(w => `<span class="compare-chip unique-1">${escapeHtml(w)}</span>`).join('')
+    : '<span class="compare-chip-empty">None</span>';
+
+  const u2Html = comparison.unique2.length > 0
+    ? comparison.unique2.map(w => `<span class="compare-chip unique-2">${escapeHtml(w)}</span>`).join('')
+    : '<span class="compare-chip-empty">None</span>';
+
+  resEl.className = 'compare-result';
+  resEl.innerHTML = `
+    <div class="compare-result-header">
+      <div class="compare-score-badge match-${comparison.category}">
+        <span>🎯 Similarity: ${comparison.score}%</span>
+      </div>
+      <div class="compare-verdict">${escapeHtml(comparison.verdict)}</div>
+    </div>
+
+    <div class="compare-progress-track">
+      <div class="compare-progress-fill" style="width: ${comparison.score}%; background-color: ${fillColor};"></div>
+    </div>
+
+    <div class="compare-tags-section">
+      <div class="compare-tags-title">Shared Terms & Overlap (${comparison.sharedWords.length})</div>
+      <div class="compare-chips-list">${sharedHtml}</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 4px;">
+      <div class="compare-tags-section">
+        <div class="compare-tags-title">Unique to First Headline (${comparison.unique1.length})</div>
+        <div class="compare-chips-list">${u1Html}</div>
+      </div>
+      <div class="compare-tags-section">
+        <div class="compare-tags-title">Unique to Second Headline (${comparison.unique2.length})</div>
+        <div class="compare-chips-list">${u2Html}</div>
+      </div>
+    </div>
+  `;
+  resEl.classList.remove('hidden');
+}
+
+function populateMainHeadlinesForComparison() {
+  const h1El = document.getElementById('first-headline-input');
+  const h2El = document.getElementById('second-headline-input');
+  const resEl = document.getElementById('compare-result');
+
+  let loaded = false;
+  if (h1El && lastExtractedHeadlines[1]) {
+    h1El.value = lastExtractedHeadlines[1];
+    loaded = true;
+  }
+  if (h2El && lastExtractedHeadlines[2]) {
+    h2El.value = lastExtractedHeadlines[2];
+    loaded = true;
+  }
+
+  if (loaded) {
+    if (resEl) resEl.classList.add('hidden');
+    handleCompareHeadlines();
+  } else {
+    showStatusMessage('No extracted headlines yet. Run "Check Sources" first or enter headlines manually.', 'warning');
+  }
+}
+
+function clearComparisonFields() {
+  const h1El = document.getElementById('first-headline-input');
+  const h2El = document.getElementById('second-headline-input');
+  const resEl = document.getElementById('compare-result');
+  if (h1El) h1El.value = '';
+  if (h2El) h2El.value = '';
+  if (resEl) {
+    resEl.innerHTML = '';
+    resEl.classList.add('hidden');
+  }
+}
+
 // Attach event listeners when DOM is loaded
 function setupListeners() {
-  const btn = document.getElementById('check-source-btn');
-  if (btn) {
-    btn.addEventListener('click', handleCheckSources);
+  const checkBtn = document.getElementById('check-source-btn');
+  if (checkBtn) {
+    checkBtn.addEventListener('click', handleCheckSources);
+  }
+
+  const compareBtn = document.getElementById('compare-btn');
+  if (compareBtn) {
+    compareBtn.addEventListener('click', handleCompareHeadlines);
   }
 
   const s1 = document.getElementById('source-input-1');
@@ -640,7 +906,30 @@ function setupListeners() {
       }
     });
   });
+
+  const h1 = document.getElementById('first-headline-input');
+  const h2 = document.getElementById('second-headline-input');
+
+  [h1, h2].forEach((input) => {
+    if (!input) return;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleCompareHeadlines();
+      }
+    });
+  });
 }
+
+// Expose functions on global window
+window.handleCheckSources = handleCheckSources;
+window.loadSampleArticles = loadSampleArticles;
+window.loadSampleUrls = loadSampleUrls;
+window.clearAllSources = clearAllSources;
+window.toggleInspectionLog = toggleInspectionLog;
+window.handleCompareHeadlines = handleCompareHeadlines;
+window.populateMainHeadlinesForComparison = populateMainHeadlinesForComparison;
+window.clearComparisonFields = clearComparisonFields;
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setupListeners);

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sources Headline Diagnosis & Comparison</title>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <main class="container">
@@ -99,6 +99,59 @@
           </div>
         </div>
 
+        <!-- Headline Comparison Section -->
+        <section class="comparison-section">
+          <div class="comparison-header">
+            <h2 class="comparison-title">Compare Headlines</h2>
+            <p class="comparison-subtitle">Select or enter two headlines to compare their similarity and shared content</p>
+          </div>
+
+          <!-- Dual Headline Compare Inputs -->
+          <div class="sources-dual-grid comparison-grid">
+            <div class="source-input-group">
+              <label for="first-headline-input" class="input-label">First Headline</label>
+              <textarea
+                id="first-headline-input"
+                class="text-input headline-compare-input"
+                rows="3"
+                placeholder="Enter or paste first headline..."
+                autocomplete="off"
+              ></textarea>
+            </div>
+
+            <div class="source-input-group">
+              <label for="second-headline-input" class="input-label">Second Headline</label>
+              <textarea
+                id="second-headline-input"
+                class="text-input headline-compare-input"
+                rows="3"
+                placeholder="Enter or paste second headline..."
+                autocomplete="off"
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- Compare Button Row -->
+          <div class="button-row">
+            <button id="compare-btn" class="btn primary-btn compare-btn" type="button" onclick="handleCompareHeadlines()">
+              Compare
+            </button>
+          </div>
+
+          <!-- Compare Helpers Row -->
+          <div class="quick-helpers-row">
+            <button id="btn-use-main-headlines" type="button" class="chip-btn" onclick="populateMainHeadlinesForComparison()">
+              📋 Use Extracted Main Headlines
+            </button>
+            <button id="btn-clear-compare" type="button" class="chip-btn chip-clear" onclick="clearComparisonFields()">
+              🗑️ Clear
+            </button>
+          </div>
+
+          <!-- Comparison Result Display Area -->
+          <div id="compare-result" class="compare-result hidden" aria-live="polite"></div>
+        </section>
+
         <!-- Scraping Engine Diagnostics & Inspection Panel -->
         <div class="inspection-panel-wrapper">
           <div class="inspection-toggle-bar">
@@ -122,6 +175,6 @@
     </div>
   </main>
 
-  <script src="script.js?v=4"></script>
+  <script src="script.js?v=5"></script>
 </body>
 </html>
