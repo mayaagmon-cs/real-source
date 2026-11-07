@@ -50,15 +50,31 @@
         <div class="headlines-section">
           <div class="headlines-header">
             <label for="headlines-output" class="headlines-title">HeadLines</label>
-            <span id="headlines-count" class="headlines-count hidden"></span>
+            <div class="headlines-controls">
+              <span id="headlines-count" class="headlines-count hidden"></span>
+              <button id="toggle-log-btn" type="button" class="log-toggle-btn" title="Toggle Scraping Engine Inspection Log">
+                Inspection Log
+              </button>
+            </div>
           </div>
           <textarea
             id="headlines-output"
             class="text-input headlines-textarea"
-            rows="6"
+            rows="8"
             readonly
-            placeholder="All headlines from the source will be presented here..."
+            placeholder="Headlines diagnosed through the upgraded scraping engine will be presented here..."
           ></textarea>
+
+          <!-- Scraping Engine Inspection & Diagnostics Panel -->
+          <div id="scraping-log-panel" class="scraping-log-panel hidden">
+            <div class="log-panel-header">
+              <div class="log-panel-title">
+                <span class="terminal-dot"></span> Scraping Engine Inspection & Diagnostic Log
+              </div>
+              <span id="bot-shield-status" class="bot-badge badge-neutral">Ready</span>
+            </div>
+            <pre id="scraping-log-content" class="log-content">Waiting for inspection run...</pre>
+          </div>
         </div>
       </div>
     </div>

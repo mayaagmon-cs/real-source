@@ -35,7 +35,7 @@ body {
 
 .container {
   width: 100%;
-  max-width: 620px;
+  max-width: 640px;
 }
 
 .card {
@@ -258,6 +258,12 @@ body {
   cursor: pointer;
 }
 
+.headlines-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .headlines-count {
   font-size: 0.75rem;
   color: #93c5fd;
@@ -266,6 +272,24 @@ body {
   padding: 3px 10px;
   border-radius: 9999px;
   font-weight: 600;
+}
+
+.log-toggle-btn {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.log-toggle-btn:hover {
+  background: rgba(148, 163, 184, 0.22);
+  color: var(--text-primary);
+  border-color: rgba(148, 163, 184, 0.4);
 }
 
 .headlines-textarea {
@@ -288,6 +312,91 @@ body {
 .headlines-textarea:focus {
   border-color: var(--primary-accent);
   box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* Scraping Engine Inspection & Diagnostics Panel */
+.scraping-log-panel {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  animation: fadeIn 0.25s ease forwards;
+}
+
+.log-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+}
+
+.log-panel-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.terminal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #3b82f6;
+  box-shadow: 0 0 6px #3b82f6;
+}
+
+.bot-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.bot-badge.badge-neutral {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.bot-badge.badge-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.bot-badge.badge-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.bot-badge.badge-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.log-content {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: #cbd5e1;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 10px 12px;
+  border-radius: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .hidden {

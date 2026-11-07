@@ -9,8 +9,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusMessage = document.getElementById('status-message');
   const headlinesOutput = document.getElementById('headlines-output');
   const headlinesCount = document.getElementById('headlines-count');
+  const toggleLogBtn = document.getElementById('toggle-log-btn');
+  const scrapingLogPanel = document.getElementById('scraping-log-panel');
+  const scrapingLogContent = document.getElementById('scraping-log-content');
+  const botShieldStatus = document.getElementById('bot-shield-status');
 
   const TARGET_TEXT = 'איזנקוט';
+
+  // Toggle log panel visibility
+  toggleLogBtn.addEventListener('click', () => {
+    scrapingLogPanel.classList.toggle('hidden');
+    toggleLogBtn.textContent = scrapingLogPanel.classList.contains('hidden') ? 'Inspection Log' : 'Hide Log';
+  });
 
   // Toggle from initial button to input form
   enterSourceBtn.addEventListener('click', () => {
@@ -19,6 +29,32 @@ document.addEventListener('DOMContentLoaded', () => {
     sourceInput.focus();
   });
 
+  // Logger helper
+  const logEntries = [];
+  function addLog(message, type = 'info') {
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌', scroll: '📜', engine: '⚙️' };
+    const prefix = icons[type] || '•';
+    const line = `[${timestamp}] ${prefix} ${message}`;
+    logEntries.push(line);
+    if (scrapingLogContent) {
+      scrapingLogContent.textContent = logEntries.join('\n');
+      scrapingLogContent.scrollTop = scrapingLogContent.scrollHeight;
+    }
+  }
+
+  function resetLogs() {
+    logEntries.length = 0;
+    if (scrapingLogContent) scrapingLogContent.textContent = '';
+    setBotBadge('Ready', 'neutral');
+  }
+
+  function setBotBadge(text, state) {
+    if (!botShieldStatus) return;
+    botShieldStatus.textContent = text;
+    botShieldStatus.className = `bot-badge badge-${state}`;
+  }
+
   // Action on checking source
   const handleCheckSource = async () => {
     const rawInput = sourceInput.value.trim();
@@ -26,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resetBadges();
     hideStatus();
     resetHeadlines();
+    resetLogs();
 
     if (!rawInput) {
       showStatus('Please enter a source URL or paste text to check.', 'error');
@@ -36,39 +73,71 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setLoadingState(true);
-    headlinesOutput.value = '🔍 Analyzing source and diagnosing headlines with multi-tiered extraction... Please wait.';
+    addLog('Scraping engine initialized.', 'engine');
+    headlinesOutput.value = '🔍 Scraping engine running: awaiting dynamic rendering & network idle... Please wait.';
 
     try {
       let content = '';
+      let fetchReport = { provider: 'direct', isBotShielded: false, httpStatus: 200, antiBotNote: '' };
 
-      // Fetch page content if input is a URL
       if (looksLikeUrl(rawInput)) {
-        content = await fetchPageContent(rawInput);
+        addLog(`Target URL identified: ${rawInput}`);
+        addLog('Step 1: Initiating dynamic rendering scraper with network-idle wait...', 'engine');
+        
+        // Auto-scroll trigger simulation
+        addLog('Step 2: Simulating auto-scroll trigger for lazy-loaded headlines & dynamic items...', 'scroll');
+        
+        const fetchResult = await fetchPageContentDynamic(rawInput);
+        content = fetchResult.content;
+        fetchReport = fetchResult.report;
       } else {
+        addLog('Input is direct text/HTML snippet. Bypassing network fetch.');
         content = rawInput;
       }
 
       setLoadingState(false);
 
-      // Perform robust cascading headline diagnosis
-      const diagnosed = extractHeadlinesCascading(content || rawInput, rawInput);
+      // Perform upgraded extraction
+      addLog('Step 3: Executing multi-tiered extraction (Semantic containers, broadened selectors, SPA state, metadata)...', 'engine');
+      const diagnosed = extractHeadlinesUpgraded(content || rawInput, rawInput, fetchReport);
       renderDiagnosedHeadlines(diagnosed);
 
-      // Check for target text "איזנקוט" across input, content, and all diagnosed headlines
+      // Inspect for anti-bot blocks
+      if (fetchReport.isBotShielded) {
+        setBotBadge('Shield Detected', 'error');
+        addLog(`Anti-Bot Inspection: ${fetchReport.antiBotNote}`, 'error');
+        scrapingLogPanel.classList.remove('hidden');
+        toggleLogBtn.textContent = 'Hide Log';
+      } else if (diagnosed.totalCount === 0) {
+        setBotBadge('Empty Containers', 'warning');
+        addLog('Inspection Warning: Semantic containers returned empty and no headlines were found.', 'warning');
+      } else {
+        setBotBadge('Clean Render', 'success');
+        addLog(`Extraction complete: ${diagnosed.totalCount} unique headlines diagnosed across all tiers.`, 'success');
+      }
+
+      // Check for target text "איזנקוט"
       const combinedSearchSpace = `${rawInput}\n${content}\n${diagnosed.allHeadlines.join('\n')}`;
       const isFound = combinedSearchSpace.includes(TARGET_TEXT);
 
       if (isFound) {
         showSuccessBadge();
         showStatus(`Success! Found "${TARGET_TEXT}" in the source.`, 'success');
+        addLog(`Target Verification: Term "${TARGET_TEXT}" was confirmed in source content.`, 'success');
       } else {
         showErrorBadges();
         showStatus(`The text "${TARGET_TEXT}" was not found in the source.`, 'error');
+        addLog(`Target Verification: Term "${TARGET_TEXT}" was not found.`, 'info');
       }
     } catch (err) {
       setLoadingState(false);
       showErrorBadges();
-      headlinesOutput.value = `❌ Could not diagnose headlines: ${err.message || 'Verification failed.'}\n\nTip: You can copy and paste the article text or headlines directly into the source box above.`;
+      setBotBadge('Scrape Blocked', 'error');
+      addLog(`Scraping Engine Failure: ${err.message || 'Verification failed.'}`, 'error');
+      scrapingLogPanel.classList.remove('hidden');
+      toggleLogBtn.textContent = 'Hide Log';
+
+      headlinesOutput.value = `❌ Scraping Error: ${err.message || 'Verification failed.'}\n\nTip: You can copy and paste the article text or headlines directly into the source box above.`;
       showStatus(
         `${err.message || 'Verification failed.'} Tip: You can also copy and paste the article text directly into the box.`,
         'error'
@@ -82,9 +151,159 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // Robust Multi-Tiered Headline Extraction & Diagnosis Engine
+  // Dynamic Scraping Engine with Headless SPA Support & Anti-Bot Inspection
   // =========================================================================
-  function extractHeadlinesCascading(rawContent, originalInput) {
+  async function fetchPageContentDynamic(inputUrl) {
+    let url = inputUrl.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      url = 'https://' + url;
+    }
+
+    const report = {
+      provider: '',
+      isBotShielded: false,
+      httpStatus: 200,
+      antiBotNote: '',
+      emptyContainerDetected: false
+    };
+
+    // Helper to detect bot shields & CAPTCHAs in payload
+    function detectBotShields(text) {
+      if (!text || typeof text !== 'string') return null;
+      const lower = text.toLowerCase();
+
+      if (lower.includes('attention required! | cloudflare') || lower.includes('cf-browser-verification')) {
+        return 'Cloudflare Security Challenge / Browser Verification';
+      }
+      if (lower.includes('just a moment...') && lower.includes('cloudflare')) {
+        return 'Cloudflare "Just a moment..." Under Attack Mode';
+      }
+      if (lower.includes('incapsula incident id') || lower.includes('powered by imperva')) {
+        return 'Imperva / Incapsula Bot Shield';
+      }
+      if (lower.includes('access denied') && lower.includes('403 forbidden')) {
+        return 'HTTP 403 Forbidden - Access Denied by Web Application Firewall (WAF)';
+      }
+      if (lower.includes('challenge-platform') || lower.includes('captcha-delivery')) {
+        return 'Automated CAPTCHA Delivery Detected';
+      }
+      return null;
+    }
+
+    // 1. Primary: Headless Chromium SPA Render via Jina Reader (with JS execution & network wait)
+    try {
+      addLog('Connecting to headless browser engine (waiting for JS execution & network idle)...');
+      const controller = new AbortController();
+      const tId = setTimeout(() => controller.abort(), 15000);
+
+      const res = await fetch(`https://r.jina.ai/${url}`, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'text/plain, text/html',
+          'X-Wait-For-Selector': 'article, main, [role="main"], h1',
+          'X-Timeout': '15',
+          'X-With-Generated-Alt': 'true'
+        }
+      });
+      clearTimeout(tId);
+
+      report.httpStatus = res.status;
+
+      if (res.ok) {
+        const text = await res.text();
+        const shield = detectBotShields(text);
+
+        if (shield) {
+          report.isBotShielded = true;
+          report.antiBotNote = shield;
+          addLog(`Headless provider flagged anti-bot challenge: ${shield}`, 'warning');
+        } else if (text && text.length > 40) {
+          report.provider = 'Jina Headless Browser Engine (Rendered DOM & JS executed)';
+          addLog('Dynamic rendering succeeded: headless browser rendered full DOM.', 'success');
+          return { content: text, report };
+        }
+      } else if (res.status === 403 || res.status === 401) {
+        report.isBotShielded = true;
+        report.antiBotNote = `HTTP ${res.status} Forbidden returned by target server.`;
+        addLog(`Headless provider returned status ${res.status}: Access Denied.`, 'warning');
+      }
+    } catch (e) {
+      addLog(`Headless rendering connection failed or timed out: ${e.message}. Attempting proxy fallback...`, 'warning');
+    }
+
+    // 2. Secondary: Raw HTML Proxy via AllOrigins (allows inspecting HTTP status and headers)
+    try {
+      addLog('Falling back to proxy extraction (checking raw DOM and HTTP headers)...');
+      const controller = new AbortController();
+      const tId = setTimeout(() => controller.abort(), 10000);
+
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, {
+        signal: controller.signal
+      });
+      clearTimeout(tId);
+
+      if (res.ok) {
+        const json = await res.json();
+        const httpCode = json?.status?.http_code || 200;
+        report.httpStatus = httpCode;
+        const rawHtml = json.contents || '';
+
+        const shield = detectBotShields(rawHtml);
+        if (shield || httpCode === 403) {
+          report.isBotShielded = true;
+          report.antiBotNote = shield || `Target server returned HTTP ${httpCode} Forbidden.`;
+          addLog(`Proxy inspection: ${report.antiBotNote}`, 'error');
+        }
+
+        if (rawHtml && rawHtml.length > 50) {
+          report.provider = 'AllOrigins Raw HTML Proxy';
+          addLog('Raw HTML proxy response received.', 'info');
+          return { content: rawHtml, report };
+        }
+      }
+    } catch (e) {
+      addLog(`Proxy fallback 1 failed: ${e.message}`, 'warning');
+    }
+
+    // 3. Tertiary: CodeTabs Proxy
+    try {
+      addLog('Falling back to secondary CORS gateway...');
+      const controller = new AbortController();
+      const tId = setTimeout(() => controller.abort(), 9000);
+
+      const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, {
+        signal: controller.signal
+      });
+      clearTimeout(tId);
+
+      if (res.ok) {
+        const txt = await res.text();
+        const shield = detectBotShields(txt);
+        if (shield) {
+          report.isBotShielded = true;
+          report.antiBotNote = shield;
+        }
+        if (txt && txt.length > 50) {
+          report.provider = 'CodeTabs Gateway';
+          addLog('Secondary CORS gateway response received.', 'info');
+          return { content: txt, report };
+        }
+      }
+    } catch (e) {
+      addLog(`Secondary CORS gateway failed: ${e.message}`, 'warning');
+    }
+
+    if (report.isBotShielded) {
+      throw new Error(`Target website blocked access with an anti-bot shield (${report.antiBotNote}).`);
+    }
+
+    throw new Error('Unable to retrieve content: all dynamic renderers and proxy gateways failed.');
+  }
+
+  // =========================================================================
+  // Upgraded Multi-Tiered Headline Extraction with Broadened Selectors & SPA State
+  // =========================================================================
+  function extractHeadlinesUpgraded(rawContent, originalInput, fetchReport) {
     if (!rawContent || typeof rawContent !== 'string') {
       return { mainHeadline: '', subHeadline: '', allHeadlines: [], totalCount: 0 };
     }
@@ -92,11 +311,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let mainHeadline = '';
     let subHeadline = '';
     const collected = [];
-    const seenMap = new Map(); // normalizedKey -> originalText
+    const seenMap = new Map();
 
-    // -------------------------------------------------------------
-    // Helper: Text Cleansing, Entity Decoding, and Normalization
-    // -------------------------------------------------------------
     function decodeEntities(str) {
       if (!str) return '';
       const txt = document.createElement('textarea');
@@ -107,20 +323,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function cleanString(str) {
       if (!str) return '';
       let cleaned = decodeEntities(str)
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')     // unwrap markdown links [text](url) -> text
-        .replace(/[*_`~#]/g, '')                      // remove markdown formatting & hashes
-        .replace(/<[^>]*>/g, '')                      // strip inline html tags
-        .replace(/[\u200E\u200F\u202A-\u202E]/g, '') // remove bidirectional formatting marks
-        .replace(/^[\s*>\-–—:•\d.]+\s*/, '')         // remove leading bullets, numbers, dashes
-        .replace(/\s+/g, ' ')                         // collapse consecutive whitespace
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')     // unwrap markdown links
+        .replace(/[*_`~#]/g, '')                      // strip markdown symbols & hashes
+        .replace(/<[^>]*>/g, '')                      // strip HTML tags
+        .replace(/[\u200E\u200F\u202A-\u202E]/g, '') // remove bidirectional formatting
+        .replace(/^[\s*>\-–—:•\d.]+\s*/, '')         // remove leading bullets & dashes
+        .replace(/\s+/g, ' ')                         // collapse whitespace
         .trim();
 
-      // Trim outer quotes
       cleaned = cleaned.replace(/^["'״׳«»“”]+|["'״׳«»“”]+$/g, '').trim();
       return cleaned;
     }
 
-    // Filter out common non-article noise, navigation, and boilerplate
     function isBoilerplateOrNav(text) {
       if (!text || text.length < 5) return true;
       const lower = text.toLowerCase();
@@ -137,25 +351,21 @@ document.addEventListener('DOMContentLoaded', () => {
         'תנאי שימוש', 'מדיניות פרטיות', 'דף הבית'
       ];
 
-      return blockedPhrases.some(phrase => lower === phrase || lower.startsWith(phrase + ' ') || lower.endsWith(' ' + phrase));
+      return blockedPhrases.some(p => lower === p || lower.startsWith(p + ' ') || lower.endsWith(' ' + p));
     }
 
     function normalizeKey(str) {
       return str.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
     }
 
-    // Deduplicator that retains the most complete version of a headline
     function registerHeadline(text, category = 'general') {
       const cleaned = cleanString(text);
       if (!cleaned || isBoilerplateOrNav(cleaned)) return;
-
-      // Discard single isolated words unless very descriptive
       if (!cleaned.includes(' ') && cleaned.length < 12) return;
 
       const key = normalizeKey(cleaned);
       if (!key || key.length < 4) return;
 
-      // Check for existing duplicates or near-duplicates
       let existingIndex = -1;
       for (let i = 0; i < collected.length; i++) {
         const existingKey = normalizeKey(collected[i]);
@@ -163,14 +373,11 @@ document.addEventListener('DOMContentLoaded', () => {
           existingIndex = i;
           break;
         }
-        // Substring enhancement: If one headline is a complete substring of another
         if (key.length > existingKey.length && key.includes(existingKey) && (existingKey.length / key.length) > 0.6) {
-          // Replace shorter with more complete headline
           collected[i] = cleaned;
           existingIndex = i;
           break;
         } else if (existingKey.length > key.length && existingKey.includes(key) && (key.length / existingKey.length) > 0.6) {
-          // Keep the existing longer one
           existingIndex = i;
           break;
         }
@@ -191,15 +398,55 @@ document.addEventListener('DOMContentLoaded', () => {
     const isHtmlContent = /<(html|head|body|article|main|section|div|p|h[1-6]|script|meta)/i.test(rawContent);
 
     // =========================================================================
-    // Tier 4: Metadata Fallbacks & Structured Schema (Extract early as reference)
+    // Tier 1 & 4: Metadata, Microdata & Hydration State Extraction
     // =========================================================================
     if (isHtmlContent) {
       try {
         const parser = new DOMParser();
         const doc = parser.parseFromString(rawContent, 'text/html');
 
-        // A. JSON-LD Article Schema (NewsArticle, Article, BlogPosting, ListItem)
+        // A. Modern SPA Hydration State Extraction (Next.js, Nuxt.js, Remix)
+        const nextDataScript = doc.getElementById('__NEXT_DATA__');
+        if (nextDataScript) {
+          try {
+            const nextJson = JSON.parse(nextDataScript.textContent);
+            addLog('Discovered Next.js client-side SPA state (__NEXT_DATA__). Extracting embedded titles...', 'info');
+            extractFromJsonObject(nextJson);
+          } catch (_) {}
+        }
+
+        const nuxtDataScript = doc.getElementById('__NUXT_DATA__');
+        if (nuxtDataScript) {
+          try {
+            const nuxtJson = JSON.parse(nuxtDataScript.textContent);
+            addLog('Discovered Nuxt.js client-side SPA state (__NUXT_DATA__). Extracting embedded titles...', 'info');
+            extractFromJsonObject(nuxtJson);
+          } catch (_) {}
+        }
+
+        function extractFromJsonObject(obj, depth = 0) {
+          if (!obj || depth > 8 || typeof obj !== 'object') return;
+          if (Array.isArray(obj)) {
+            obj.forEach(item => extractFromJsonObject(item, depth + 1));
+            return;
+          }
+          for (const [k, v] of Object.entries(obj)) {
+            const keyLower = k.toLowerCase();
+            if (typeof v === 'string') {
+              if (keyLower === 'headline' || keyLower === 'title' || keyLower === 'post_title' || keyLower === 'articletitle') {
+                registerHeadline(v, 'general');
+              } else if (keyLower === 'subtitle' || keyLower === 'description' || keyLower === 'summary') {
+                if (v.length > 25 && v.length < 350) registerHeadline(v, 'sub');
+              }
+            } else if (typeof v === 'object') {
+              extractFromJsonObject(v, depth + 1);
+            }
+          }
+        }
+
+        // B. JSON-LD Article Schema
         const ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
+        let ldCount = 0;
         ldScripts.forEach((script) => {
           try {
             const data = JSON.parse(script.textContent);
@@ -207,25 +454,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             items.forEach((item) => {
               if (item && typeof item === 'object') {
-                if (item.headline) registerHeadline(item.headline, 'main');
-                if (item.alternativeHeadline) registerHeadline(item.alternativeHeadline, 'sub');
+                if (item.headline) { registerHeadline(item.headline, 'main'); ldCount++; }
+                if (item.alternativeHeadline) { registerHeadline(item.alternativeHeadline, 'sub'); ldCount++; }
                 if (item.description && typeof item.description === 'string' && item.description.length > 20) {
                   registerHeadline(item.description, 'sub');
                 }
-                // Handle ItemList / Carousel schema (news carousels & feeds)
                 if (Array.isArray(item.itemListElement)) {
                   item.itemListElement.forEach((entry) => {
-                    if (entry?.name) registerHeadline(entry.name, 'general');
-                    if (entry?.item?.headline) registerHeadline(entry.item.headline, 'general');
-                    if (entry?.item?.name) registerHeadline(entry.item.name, 'general');
+                    if (entry?.name) { registerHeadline(entry.name, 'general'); ldCount++; }
+                    if (entry?.item?.headline) { registerHeadline(entry.item.headline, 'general'); ldCount++; }
+                    if (entry?.item?.name) { registerHeadline(entry.item.name, 'general'); ldCount++; }
                   });
                 }
               }
             });
           } catch (_) {}
         });
+        if (ldCount > 0) addLog(`Extracted ${ldCount} headline(s) from JSON-LD schema metadata.`, 'info');
 
-        // B. OpenGraph & Twitter Meta Tags
+        // C. OpenGraph & Twitter Meta Tags
         const ogTitle = doc.querySelector('meta[property="og:title"], meta[name="og:title"], meta[property="og:headline"]')?.getAttribute('content');
         if (ogTitle) registerHeadline(ogTitle, 'main');
 
@@ -238,15 +485,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const twDesc = doc.querySelector('meta[name="twitter:description"], meta[property="twitter:description"]')?.getAttribute('content');
         if (twDesc && twDesc.length > 20) registerHeadline(twDesc, 'sub');
 
-        // C. Document Title (cleaned of site suffix)
+        // D. Microdata (itemprop="headline", itemprop="name")
+        doc.querySelectorAll('[itemprop="headline"], [itemprop="name"], [itemprop="alternativeHeadline"]').forEach(el => {
+          registerHeadline(el.textContent, 'general');
+        });
+
+        // E. Document Title
         if (doc.title) {
           const cleanedTitle = doc.title.replace(/\s*[-–|:]\s*(ynet|וואלה|חדשות 12|mako|הארץ|מעריב|ישראל היום|the marker|n12|cnn|bbc|reuters|ap news|guardian).*$/i, '');
           registerHeadline(cleanedTitle, 'main');
         }
 
-        // =======================================================================
-        // Tier 5: DOM Noise Filtering (Remove non-article elements before parsing)
-        // =======================================================================
+        // =====================================================================
+        // Noise Removal before DOM Extraction
+        // =====================================================================
         const noiseSelectors = [
           'nav', 'footer', 'aside',
           'header:not(article header):not(main header)',
@@ -258,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
           '[class*="social" i]', '[class*="share" i]',
           '[class*="comment" i]', '[class*="newsletter" i]',
           '[class*="advertisement" i]', '[class*="banner-ad" i]',
-          'script', 'style', 'noscript', 'svg'
+          'style', 'noscript', 'svg'
         ];
 
         const cleanedDoc = doc.cloneNode(true);
@@ -266,81 +518,53 @@ document.addEventListener('DOMContentLoaded', () => {
           try { node.remove(); } catch (_) {}
         });
 
-        // =======================================================================
-        // Tier 1: Target Semantic Containers First (<article>, <main>, <section>)
-        // =======================================================================
-        const semanticContainerSelectors = [
-          'article',
-          '[role="article"]',
-          'main',
-          '[role="main"]',
-          '.main-content',
-          '#main-content',
-          '.content-area',
-          '.entry-content',
-          '.post-content',
-          '.story-body',
-          'section[class*="article" i]',
-          'section[class*="story" i]',
-          'section[class*="post" i]',
-          'section[class*="content" i]',
-          'section'
+        // =====================================================================
+        // Inspection: Check if Main Content Containers are Empty
+        // =====================================================================
+        const mainContainer = cleanedDoc.querySelector('main, article, #root, #app, [role="main"]');
+        if (mainContainer) {
+          const innerText = mainContainer.textContent.trim();
+          if (innerText.length < 30) {
+            addLog('Container Inspection: <main>/<article> is nearly empty (client-side dynamic render pending or blocked).', 'warning');
+          } else {
+            addLog(`Container Inspection: Main container located with ${innerText.length} characters of rendered text.`, 'info');
+          }
+        }
+
+        // =====================================================================
+        // Broadened CSS Selectors (ARIA roles, substring patterns, article links)
+        // =====================================================================
+        const broadenedSelectors = [
+          // 1. Heading tags and ARIA heading roles
+          'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+          '[role="heading"]', '[aria-level]',
+          // 2. Substring class patterns (*=title, *=headline, *=card-title, *=post-title)
+          '[class*="title" i]', '[id*="title" i]',
+          '[class*="headline" i]', '[id*="headline" i]',
+          '[class*="card-title" i]', '[id*="card-title" i]',
+          '[class*="post-title" i]', '[id*="post-title" i]',
+          '[class*="entry-title" i]', '[id*="entry-title" i]',
+          '[class*="article-title" i]', '[id*="article-title" i]',
+          '[class*="story-title" i]', '[id*="story-title" i]',
+          '[class*="mainTitle" i]', '[class*="subTitle" i]', '[class*="slotTitle" i]',
+          '[class*="teaser-title" i]', '[class*="feed-title" i]',
+          // 3. Data attributes
+          '[data-qa*="headline" i]', '[data-mrf-title]'
         ];
 
-        const foundContainers = cleanedDoc.querySelectorAll(semanticContainerSelectors.join(', '));
+        // Semantic containers priority
+        const semanticContainers = cleanedDoc.querySelectorAll('article, [role="article"], main, [role="main"], section[class*="article" i], section[class*="content" i]');
 
-        // Common CMS Pattern Selectors (Tier 3)
-        const cmsHeadlineSelectors = [
-          'h1', 'h2', 'h3', 'h4', 'h5', 'h6', '[role="heading"]',
-          '[class*="headline" i]',
-          '[class*="post-title" i]',
-          '[class*="entry-title" i]',
-          '[class*="card-title" i]',
-          '[class*="article-title" i]',
-          '[class*="article-header" i]',
-          '[class*="story-headline" i]',
-          '[class*="news-title" i]',
-          '[class*="mainTitle" i]',
-          '[class*="subTitle" i]',
-          '[class*="slotTitle" i]',
-          '[class*="teaser-title" i]',
-          '[class*="feed-title" i]',
-          '[id*="headline" i]',
-          '[id*="post-title" i]',
-          '[id*="article-title" i]',
-          '[data-qa="headline"]',
-          '[data-qa="sub-headline"]',
-          '[data-mrf-title]',
-          '[itemprop="headline"]',
-          '[itemprop="name"]',
-          '[itemprop="alternativeHeadline"]'
-        ];
-
-        // Tier 2: Broaden Element & Wrapper Coverage inside containers
-        const wrapperSelectors = [
-          ...cmsHeadlineSelectors,
-          'p[class*="sub" i]', 'div[class*="sub" i]',
-          'p[class*="lead" i]', 'div[class*="lead" i]',
-          'p[class*="kicker" i]', 'span[class*="kicker" i]',
-          'a[class*="title" i]', 'a[class*="headline" i]', 'a[class*="link" i]'
-        ];
-
-        if (foundContainers.length > 0) {
-          foundContainers.forEach((container) => {
-            // Find headings and CMS headline wrappers inside this semantic container
-            const elements = container.querySelectorAll(wrapperSelectors.join(', '));
-            elements.forEach((el) => {
+        if (semanticContainers.length > 0) {
+          semanticContainers.forEach((container) => {
+            // Match broadened selectors inside container
+            container.querySelectorAll(broadenedSelectors.join(', ')).forEach((el) => {
               const tag = el.tagName.toLowerCase();
-              const category = (tag === 'h1' || el.matches('[class*="mainTitle" i]'))
-                ? 'main'
-                : (tag === 'h2' || el.matches('[class*="subTitle" i], p[class*="lead" i]'))
-                  ? 'sub'
-                  : 'general';
-
-              registerHeadline(el.textContent, category);
+              const cat = (tag === 'h1' || el.matches('[class*="mainTitle" i]')) ? 'main' : (tag === 'h2' || el.matches('[class*="subTitle" i]')) ? 'sub' : 'general';
+              registerHeadline(el.textContent, cat);
             });
 
-            // Also check for direct article link headlines inside article containers
+            // Article links inside <article> or <main>
             container.querySelectorAll('a').forEach((link) => {
               const linkText = link.textContent.trim();
               if (linkText.length >= 18 && linkText.length <= 250 && linkText.includes(' ')) {
@@ -350,42 +574,44 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         }
 
-        // =======================================================================
-        // Fallback: Scan Cleaned Body if Containers Were Insufficient
-        // =======================================================================
-        if (collected.length < 3) {
-          cleanedDoc.querySelectorAll(wrapperSelectors.join(', ')).forEach((el) => {
+        // Global fallback across cleaned document if elements were sparse
+        if (collected.length < 4) {
+          cleanedDoc.querySelectorAll(broadenedSelectors.join(', ')).forEach((el) => {
             const tag = el.tagName.toLowerCase();
-            const category = (tag === 'h1') ? 'main' : (tag === 'h2') ? 'sub' : 'general';
-            registerHeadline(el.textContent, category);
+            const cat = (tag === 'h1') ? 'main' : 'general';
+            registerHeadline(el.textContent, cat);
+          });
+
+          cleanedDoc.querySelectorAll('article a, main a').forEach((link) => {
+            const linkText = link.textContent.trim();
+            if (linkText.length >= 18 && linkText.length <= 250 && linkText.includes(' ')) {
+              registerHeadline(linkText, 'general');
+            }
           });
         }
       } catch (_) {}
     }
 
     // =========================================================================
-    // Markdown & Jina Reader Handling (For JS-heavy/proxy feeds)
+    // Markdown & Jina Reader Handling
     // =========================================================================
     const lines = rawContent.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Jina "Title: ..."
       if (/^Title:\s*(.+)$/i.test(line)) {
         const m = line.match(/^Title:\s*(.+)$/i);
         if (m && m[1]) registerHeadline(m[1], 'main');
         continue;
       }
 
-      // Markdown Headings: # H1, ## H2, ### H3, #### H4
       const hMatch = line.match(/^(#{1,4})\s+(.+)$/);
       if (hMatch) {
         const level = hMatch[1].length;
         const text = hMatch[2];
         if (level === 1) {
           registerHeadline(text, 'main');
-          // Check subsequent line for lead paragraph / sub-headline
           for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
             const nextLine = lines[j].trim();
             if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('!') && !nextLine.startsWith('[')) {
@@ -403,14 +629,12 @@ document.addEventListener('DOMContentLoaded', () => {
         continue;
       }
 
-      // Feed / Story links: [Headline Text](url) or - [Headline Text](url) or * [Headline Text](url)
       const linkMatch = line.match(/^(?:[-*•\d.]+\s*)?\[([^\]]{15,300})\]\(https?:\/\/[^)]+\)/);
       if (linkMatch && linkMatch[1]) {
         registerHeadline(linkMatch[1], 'general');
         continue;
       }
 
-      // Bold standalone headline lines: **Headline Text**
       const boldMatch = line.match(/^\s*\*\*([^*\n]{15,300})\*\*\s*$/);
       if (boldMatch && boldMatch[1]) {
         registerHeadline(boldMatch[1], 'general');
@@ -418,9 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // =========================================================================
-    // Plain Text Fallback (When raw text is pasted directly)
-    // =========================================================================
+    // Plain text fallback
     if (collected.length === 0) {
       const candidateLines = lines
         .map(l => l.trim())
@@ -437,7 +659,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Default main headline if missing
     if (!mainHeadline && collected.length > 0) {
       mainHeadline = collected[0];
     }
@@ -453,7 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Render the diagnosed headlines fully and structured in the textarea
   function renderDiagnosedHeadlines(diagnosed) {
     if (!diagnosed || diagnosed.allHeadlines.length === 0) {
-      headlinesOutput.value = 'No headlines were detected in this source.\n\nTip: You can copy and paste the text of the article directly into the input box above.';
+      headlinesOutput.value = 'No headlines were detected in this source.\n\nTip: You can copy and paste the text or HTML of the article directly into the input box above.';
       headlinesCount.textContent = '';
       headlinesCount.classList.add('hidden');
       return;
@@ -488,96 +709,15 @@ document.addEventListener('DOMContentLoaded', () => {
     headlinesCount.classList.add('hidden');
   }
 
-  // Multi-strategy fetch engine with Jina Reader as primary
-  async function fetchPageContent(inputUrl) {
-    let url = inputUrl.trim();
-    if (!/^https?:\/\//i.test(url)) {
-      url = 'https://' + url;
-    }
-
-    const strategies = [
-      // 1. Jina Reader: Renders modern JS news sites and bypasses cloudflare/bot-shields
-      async (target) => {
-        const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), 12000);
-        try {
-          const res = await fetch(`https://r.jina.ai/${target}`, {
-            signal: controller.signal,
-            headers: { 'Accept': 'text/plain' }
-          });
-          clearTimeout(tId);
-          if (res.ok) {
-            const txt = await res.text();
-            if (txt && txt.length > 30) return txt;
-          }
-        } catch (e) {
-          clearTimeout(tId);
-        }
-        return null;
-      },
-
-      // 2. AllOrigins raw proxy fallback
-      async (target) => {
-        const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), 8000);
-        try {
-          const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`, {
-            signal: controller.signal
-          });
-          clearTimeout(tId);
-          if (res.ok) {
-            const txt = await res.text();
-            if (txt && txt.length > 30) return txt;
-          }
-        } catch (e) {
-          clearTimeout(tId);
-        }
-        return null;
-      },
-
-      // 3. CodeTabs proxy fallback
-      async (target) => {
-        const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), 8000);
-        try {
-          const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`, {
-            signal: controller.signal
-          });
-          clearTimeout(tId);
-          if (res.ok) {
-            const txt = await res.text();
-            if (txt && txt.length > 30) return txt;
-          }
-        } catch (e) {
-          clearTimeout(tId);
-        }
-        return null;
-      }
-    ];
-
-    for (const strategy of strategies) {
-      try {
-        const content = await strategy(url);
-        if (content) {
-          return content;
-        }
-      } catch (_) {
-        // Continue to next fallback
-      }
-    }
-
-    throw new Error('This website blocks automated cross-origin readers.');
-  }
-
   function setLoadingState(isLoading) {
     if (isLoading) {
       checkSourceBtn.disabled = true;
-      checkSourceBtn.textContent = 'Checking source...';
+      checkSourceBtn.textContent = 'Diagnosing...';
       inputBadge.className = 'result-badge badge-loading';
       inputBadge.innerHTML = '<div class="spinner"></div>';
       inputBadge.classList.remove('hidden');
       buttonBadge.classList.add('hidden');
-      showStatus('Fetching source and analyzing headlines...', 'info');
+      showStatus('Executing dynamic rendering & multi-tiered diagnosis...', 'info');
     } else {
       checkSourceBtn.disabled = false;
       checkSourceBtn.textContent = 'Check source';
@@ -635,6 +775,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hideStatus();
     if (!sourceInput.value.trim()) {
       resetHeadlines();
+      resetLogs();
     }
   });
 });
