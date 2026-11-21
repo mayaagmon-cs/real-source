@@ -108,6 +108,58 @@
         line-height: 1.6;
       }
 
+      .estimate {
+        margin: 1.5rem 0;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        background: rgba(23, 24, 23, 0.7);
+      }
+
+      .estimate h2 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .estimate progress {
+        display: block;
+        width: 100%;
+        height: 0.8rem;
+        margin: 0.85rem 0 0.5rem;
+        overflow: hidden;
+        border: 0;
+        border-radius: 999px;
+        background: #343632;
+        accent-color: var(--orange);
+      }
+
+      .estimate progress::-webkit-progress-bar {
+        border-radius: 999px;
+        background: #343632;
+      }
+
+      .estimate progress::-webkit-progress-value {
+        border-radius: 999px;
+        background: var(--orange);
+      }
+
+      .estimate progress::-moz-progress-bar {
+        border-radius: 999px;
+        background: var(--orange);
+      }
+
+      .estimate-value {
+        margin: 0;
+        font-weight: 700;
+      }
+
+      .estimate-note {
+        margin: 0.45rem 0 0;
+        color: var(--muted);
+        font-size: 0.82rem;
+        line-height: 1.6;
+      }
+
       .results {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -242,6 +294,23 @@
             <p class="status" id="url-status" aria-live="polite"></p>
           </div>
 
+          <section class="estimate" aria-labelledby="estimate-heading">
+            <h2 id="estimate-heading">מדד תוכן עובדתי</h2>
+            <progress
+              id="estimate-meter"
+              max="100"
+              value="0"
+              aria-label="אחוז המשפטים שסווגו כעובדות"
+              aria-describedby="estimate-value estimate-note"
+            ></progress>
+            <p class="estimate-value" id="estimate-value" aria-live="polite">
+              המדד יוצג לאחר חילוץ או הזנת טקסט.
+            </p>
+            <p class="estimate-note" id="estimate-note">
+              זהו אחוז המשפטים שסווגו כעובדות לפי סימני ניסוח בלבד, לא בדיקה אם הם נכונים.
+            </p>
+          </section>
+
           <label for="source-text">הטקסט שלכם</label>
           <textarea
             id="source-text"
@@ -282,6 +351,8 @@
       const pageUrl = document.querySelector("#page-url");
       const extractButton = document.querySelector("#extract-button");
       const urlStatus = document.querySelector("#url-status");
+      const estimateMeter = document.querySelector("#estimate-meter");
+      const estimateValue = document.querySelector("#estimate-value");
 
       const nonFactPatterns = [
         /[?؟]/u,
@@ -313,6 +384,33 @@
         const remainder = text.slice(start).trim();
         if (remainder) sentences.push(remainder);
         return sentences;
+      }
+
+      function classifySentences(sentences) {
+        const facts = [];
+        const nonFacts = [];
+
+        for (const sentence of sentences) {
+          const output = nonFactPatterns.some((pattern) => pattern.test(sentence))
+            ? nonFacts
+            : facts;
+          output.push(sentence);
+        }
+
+        return { facts, nonFacts };
+      }
+
+      function updateEstimate(text) {
+        const sentences = splitSentences(text);
+        const { facts } = classifySentences(sentences);
+        const percentage = sentences.length
+          ? Math.round((facts.length / sentences.length) * 100)
+          : 0;
+
+        estimateMeter.value = percentage;
+        estimateValue.textContent = sentences.length
+          ? `${percentage}% מהמשפטים סווגו כעובדות (${facts.length} מתוך ${sentences.length}).`
+          : "המדד יוצג לאחר חילוץ או הזנת טקסט.";
       }
 
       extractButton.addEventListener("click", async () => {
@@ -351,7 +449,15 @@
             throw new Error(`שירות החילוץ החזיר שגיאה (${response.status}).`);
           }
 
-          const extractedText = (await response.text()).trim();
+          const readerResponse = (await response.text()).trim();
+          const contentMarker = "Markdown Content:";
+          const contentStart = readerResponse.indexOf(contentMarker);
+          const extractedText = (
+            contentStart >= 0
+              ? readerResponse.slice(contentStart + contentMarker.length)
+              : readerResponse
+          ).trim();
+
           if (!extractedText) {
             throw new Error("לא נמצא טקסט קריא בעמוד הזה.");
           }
@@ -383,24 +489,18 @@
           return;
         }
 
-        const facts = [];
-        const nonFacts = [];
-
-        for (const sentence of sentences) {
-          const output = nonFactPatterns.some((pattern) => pattern.test(sentence))
-            ? nonFacts
-            : facts;
-          output.push(sentence);
-        }
+        const { facts, nonFacts } = classifySentences(sentences);
 
         factsOutput.value = facts.join("\n");
         nonFactsOutput.value = nonFacts.join("\n");
+        updateEstimate(source.value);
         status.textContent = `המיון הושלם: ${facts.length} משפטים סומנו כעובדות ו-${nonFacts.length} כמשפטים שאינם עובדות.`;
       });
 
       source.addEventListener("input", () => {
         factsOutput.value = "";
         nonFactsOutput.value = "";
+        updateEstimate(source.value);
         status.textContent = source.value.trim()
           ? "לחצו על „מיון הטקסט” כדי למיין את המשפטים."
           : "הוסיפו טקסט כדי להתחיל.";
