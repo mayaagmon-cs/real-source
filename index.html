@@ -1,9 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="he" dir="rtl">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Real Source</title>
+    <meta
+      name="description"
+      content="הדביקו טקסט בעברית ומיינו את המשפטים בו לעובדות ולמשפטים שאינם עובדות."
+    />
+    <title>Real Source — מיון עובדות בטקסט</title>
     <style>
       :root {
         color-scheme: dark;
@@ -11,6 +15,7 @@
         --muted: #aaa99f;
         --orange: #ff6b35;
         --panel: #171817;
+        --border: #343632;
       }
 
       * {
@@ -20,109 +25,264 @@
       body {
         min-height: 100vh;
         margin: 0;
-        overflow: hidden;
         font-family: Inter, "Segoe UI", Arial, sans-serif;
         color: var(--ink);
         background:
-          radial-gradient(circle at 78% 18%, rgba(255, 107, 53, 0.12), transparent 24rem),
+          radial-gradient(circle at 18% 12%, rgba(255, 107, 53, 0.12), transparent 24rem),
           linear-gradient(135deg, #101110 0%, #090a09 100%);
       }
 
       main {
-        position: relative;
-        display: grid;
-        align-content: center;
-        min-height: 100vh;
-        padding: 6vw 8vw;
+        width: min(1120px, 100%);
+        margin: 0 auto;
+        padding: clamp(2rem, 7vw, 5rem) clamp(1.25rem, 5vw, 4rem) 2rem;
       }
 
-      main::after {
-        content: "";
-        position: absolute;
-        right: 8vw;
-        bottom: 8vw;
-        width: 18rem;
-        height: 18rem;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50%;
-        box-shadow:
-          0 0 0 4rem rgba(255, 255, 255, 0.018),
-          0 0 0 8rem rgba(255, 255, 255, 0.012);
-        pointer-events: none;
+      header {
+        margin-bottom: 2.5rem;
       }
 
-      .eyebrow {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin: 0 0 1.5rem;
+      .brand {
+        margin: 0 0 1.25rem;
         color: var(--orange);
-        font-size: 0.75rem;
-        font-weight: 800;
-        letter-spacing: 0.22em;
-        text-transform: uppercase;
-      }
-
-      .eyebrow::before {
-        content: "";
-        width: 2.5rem;
-        height: 2px;
-        background: var(--orange);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 1.25rem;
+        font-style: italic;
+        letter-spacing: 0.02em;
       }
 
       h1 {
-        max-width: 8ch;
         margin: 0;
-        font-family: Georgia, "Times New Roman", serif;
-        font-size: clamp(4.5rem, 11vw, 9.5rem);
-        font-weight: 500;
-        line-height: 0.82;
-        letter-spacing: -0.07em;
+        font-size: clamp(2rem, 5vw, 3.5rem);
+        line-height: 1.2;
       }
 
-      h1 span {
-        display: block;
-        margin-left: 0.55em;
-        color: var(--orange);
-        font-style: italic;
-      }
-
-      .footer {
-        position: absolute;
-        bottom: 3vw;
-        left: 8vw;
+      .intro {
+        max-width: 42rem;
+        margin: 0.75rem 0 0;
         color: var(--muted);
-        font-size: 0.75rem;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
+        line-height: 1.7;
       }
 
-      @media (max-width: 600px) {
-        main {
-          padding: 2rem;
+      .input-panel {
+        margin-bottom: 1.5rem;
+      }
+
+      .results {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 0.65rem;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+
+      textarea {
+        display: block;
+        width: 100%;
+        min-height: 12rem;
+        padding: 1rem;
+        resize: vertical;
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        outline: none;
+        background: var(--panel);
+        color: var(--ink);
+        font: inherit;
+        line-height: 1.7;
+      }
+
+      textarea:focus {
+        border-color: var(--orange);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+      }
+
+      textarea::placeholder {
+        color: #777970;
+      }
+
+      textarea[readonly] {
+        min-height: 15rem;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+
+      button {
+        min-height: 2.9rem;
+        padding: 0.7rem 1.25rem;
+        border: 0;
+        border-radius: 0.55rem;
+        background: var(--orange);
+        color: #17110e;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #ff855b;
+      }
+
+      button:focus-visible {
+        outline: 3px solid var(--ink);
+        outline-offset: 3px;
+      }
+
+      .status,
+      .note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.6;
+      }
+
+      .note {
+        margin-top: 1rem;
+        font-size: 0.82rem;
+      }
+
+      @media (max-width: 680px) {
+        .results {
+          grid-template-columns: 1fr;
         }
 
-        h1 {
-          font-size: clamp(4rem, 20vw, 6rem);
+        textarea[readonly] {
+          min-height: 10rem;
         }
 
-        main::after {
-          right: -8rem;
-          bottom: 5rem;
-        }
-
-        .footer {
-          bottom: 2rem;
-          left: 2rem;
+        .actions {
+          align-items: flex-start;
+          flex-direction: column;
         }
       }
     </style>
   </head>
   <body>
     <main>
-      <p class="eyebrow">Independent journal</p>
-      <h1>Real <span>Source</span></h1>
-      <p class="footer">Ideas worth tracing</p>
+      <header>
+        <p class="brand" dir="ltr">Real Source</p>
+        <h1>מה עובדה ומה לא?</h1>
+        <p class="intro">
+          הדביקו טקסט בעברית, והמשפטים שבו ימוינו למשפטים שמסומנים כעובדות
+          ולמשפטים שאינם עובדות.
+        </p>
+      </header>
+
+      <form id="sorter">
+        <div class="input-panel">
+          <label for="source-text">הטקסט שלכם</label>
+          <textarea
+            id="source-text"
+            dir="auto"
+            placeholder="הדביקו או כתבו כאן טקסט בעברית..."
+            required
+          ></textarea>
+          <div class="actions">
+            <button type="submit">מיון הטקסט</button>
+            <p class="status" id="status" aria-live="polite">הוסיפו טקסט כדי להתחיל.</p>
+          </div>
+        </div>
+
+        <div class="results">
+          <div>
+            <label for="facts">משפטים שמסומנים כעובדות</label>
+            <textarea id="facts" dir="auto" readonly aria-label="משפטים שמסומנים כעובדות"></textarea>
+          </div>
+          <div>
+            <label for="non-facts">משפטים שאינם עובדות</label>
+            <textarea id="non-facts" dir="auto" readonly aria-label="משפטים שאינם עובדות"></textarea>
+          </div>
+        </div>
+      </form>
+
+      <p class="note">
+        הסיווג מבוסס על סימני שאלה וניסוחי דעה, אי־ודאות, המלצה או תחזית. הוא
+        אינו בודק את אמיתות המידע מול מקורות; משפטים שלא זוהו ככאלה יסומנו כעובדות.
+      </p>
     </main>
+
+    <script>
+      const form = document.querySelector("#sorter");
+      const source = document.querySelector("#source-text");
+      const factsOutput = document.querySelector("#facts");
+      const nonFactsOutput = document.querySelector("#non-facts");
+      const status = document.querySelector("#status");
+
+      const nonFactPatterns = [
+        /[?؟]/u,
+        /(?:^|[\s,;:])(?:מי|מה|מתי|איפה|היכן|איך|למה|מדוע|כמה|האם)(?=$|[\s,;:.!?؟])/u,
+        /(?:^|[\s,;:])(?:לדעתי|לטעמי|בעיניי|לפי דעתי|נראה לי|אני חושב(?:ת)?|אני מאמין(?:ה)?|אני מרגיש(?:ה)?|אני סבור(?:ה)?)(?=$|[\s,;:.!?؟])/u,
+        /(?:^|[\s,;:])(?:אולי|כנראה|ייתכן|יתכן|ככל הנראה|לא בטוח|לא בטוחה|יכול להיות ש|אפשר ש|נראה ש|עשוי(?:ה|ים|ות)?|עלול(?:ה|ים|ות)?|צפוי(?:ה|ים|ות)?)(?=$|[\s,;:.!?؟])/u,
+        /(?:^|[\s,;:])(?:צריך|צריכה|צריכים|צריכות|כדאי|מומלץ|רצוי|אנא|נא|בואו)(?=$|[\s,;:.!?؟])/u,
+        /(?:^|[\s,;:])(?:בעתיד|מחר|בשבוע הבא|בחודש הבא|בשנה הבאה|לפי התחזית)(?=$|[\s,;:.!?؟])/u,
+      ];
+
+      function splitSentences(text) {
+        const sentences = [];
+        let start = 0;
+
+        for (let index = 0; index < text.length; index += 1) {
+          const character = text[index];
+          const isLineBreak = character === "\n";
+          const isSentenceEnd =
+            /[.!?؟]/u.test(character) &&
+            (index === text.length - 1 || /\s/u.test(text[index + 1]));
+
+          if (isLineBreak || isSentenceEnd) {
+            const sentence = text.slice(start, index + (isLineBreak ? 0 : 1)).trim();
+            if (sentence) sentences.push(sentence);
+            start = index + 1;
+          }
+        }
+
+        const remainder = text.slice(start).trim();
+        if (remainder) sentences.push(remainder);
+        return sentences;
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const sentences = splitSentences(source.value);
+
+        if (sentences.length === 0) {
+          factsOutput.value = "";
+          nonFactsOutput.value = "";
+          status.textContent = "לא נמצא טקסט למיון.";
+          source.focus();
+          return;
+        }
+
+        const facts = [];
+        const nonFacts = [];
+
+        for (const sentence of sentences) {
+          const output = nonFactPatterns.some((pattern) => pattern.test(sentence))
+            ? nonFacts
+            : facts;
+          output.push(sentence);
+        }
+
+        factsOutput.value = facts.join("\n");
+        nonFactsOutput.value = nonFacts.join("\n");
+        status.textContent = `המיון הושלם: ${facts.length} משפטים סומנו כעובדות ו-${nonFacts.length} כמשפטים שאינם עובדות.`;
+      });
+
+      source.addEventListener("input", () => {
+        factsOutput.value = "";
+        nonFactsOutput.value = "";
+        status.textContent = source.value.trim()
+          ? "לחצו על „מיון הטקסט” כדי למיין את המשפטים."
+          : "הוסיפו טקסט כדי להתחיל.";
+      });
+    </script>
   </body>
 </html>
